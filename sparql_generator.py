@@ -1,0 +1,519 @@
+# sparql_generator.py
+# ==============================================
+# PART 1
+# LangChain + Ollama + Dynamic Schema Extraction
+# ==============================================
+
+import re
+from typing import Dict, List
+
+from langchain_ollama import ChatOllama
+from langchain_core.prompts import PromptTemplate
+from rdflib import Graph
+
+
+class SparqlGenerator:
+
+    """
+    Natural Language
+            ↓
+        LangChain
+            ↓
+      Ollama (Llama3)
+            ↓
+         SPARQL
+    """
+
+    def __init__(
+    self,
+    ontology,
+    model_name: str = "qwen2.5:latest"
+):
+
+        self.ontology = ontology
+
+        self.namespace = (
+            "http://example.org/"
+            "healthcare-hospital.owl#"
+        )
+
+        self.llm = ChatOllama(
+
+            model=model_name,
+
+            temperature=0
+        )
+
+        self.prompt = PromptTemplate(
+
+            input_variables=[
+
+                "namespace",
+
+                "classes",
+
+                "object_properties",
+
+                "data_properties",
+
+                "question"
+            ],
+
+            template="""
+You are an expert SPARQL generator.
+
+Generate SPARQL query ONLY.
+
+Do not explain.
+
+Do not use markdown.
+
+Do not surround with ```sparql.
+
+Ontology Namespace:
+
+{namespace}
+
+PREFIX:
+
+PREFIX hc: <{namespace}>
+
+Available Classes:
+
+{classes}
+
+Available Object Properties:
+
+{object_properties}
+
+Available Data Properties:
+
+{data_properties}
+
+Rules:
+
+1. Use ONLY the classes listed above.
+
+2. Use ONLY the properties listed above.
+
+3. Always include:
+
+PREFIX hc: <{namespace}>
+
+4. Return valid SPARQL.
+
+5. Return ONLY SELECT queries.
+
+6. Use object properties exactly as defined.
+
+7. If the question cannot be answered,
+return an empty SELECT query.
+
+Question:
+
+{question}
+
+SPARQL:
+"""
+        )
+
+    # ==========================================
+    # DYNAMIC SCHEMA EXTRACTION
+    # ==========================================
+
+    def get_schema(self) -> Dict:
+
+        return {
+
+            "classes":
+
+                self.get_classes(),
+
+            "object_properties":
+
+                self.get_object_properties(),
+
+            "data_properties":
+
+                self.get_data_properties()
+        }
+
+    def get_classes(self) -> List[str]:
+
+        return sorted(
+
+            [
+
+                cls.name
+
+                for cls in (
+
+                    self.ontology
+
+                    .onto
+
+                    .classes()
+
+                )
+
+            ]
+
+        )
+
+    def get_object_properties(self) -> List[str]:
+
+        return sorted(
+
+            [
+
+                prop.name
+
+                for prop in (
+
+                    self.ontology
+
+                    .onto
+
+                    .object_properties()
+
+                )
+
+            ]
+
+        )
+
+    def get_data_properties(self) -> List[str]:
+
+        return sorted(
+
+            [
+
+                prop.name
+
+                for prop in (
+
+                    self.ontology
+
+                    .onto
+
+                    .data_properties()
+
+                )
+
+            ]
+
+        )
+
+    # ==========================================
+    # PROMPT CONSTRUCTION
+    # ==========================================
+
+    def build_prompt(
+
+        self,
+
+        question: str
+
+    ):
+
+        schema = self.get_schema()
+
+        return self.prompt.format(
+
+            namespace=self.namespace,
+
+            classes="\n".join(
+
+                schema["classes"]
+
+            ),
+
+            object_properties="\n".join(
+
+                schema["object_properties"]
+
+            ),
+
+            data_properties="\n".join(
+
+                schema["data_properties"]
+
+            ),
+
+            question=question
+        )
+
+    # ==========================================
+    # SPARQL GENERATION
+    # ==========================================
+
+    def generate(
+
+        self,
+
+        question: str
+
+    ) -> str:
+
+        prompt = self.build_prompt(
+
+            question
+        )
+
+        response = self.llm.invoke(
+
+            prompt
+        )
+
+        sparql = response.content
+
+        sparql = self.clean_sparql(
+
+            sparql
+        )
+
+        return sparql
+
+    # ==========================================
+    # CLEANUP
+    # ==========================================
+
+    def clean_sparql(
+
+        self,
+
+        sparql: str
+
+    ) -> str:
+
+        sparql = sparql.strip()
+
+        sparql = re.sub(
+
+            r"```sparql",
+
+            "",
+
+            sparql,
+
+            flags=re.IGNORECASE
+        )
+
+        sparql = sparql.replace(
+
+            "```",
+
+            ""
+        )
+
+        return sparql.strip()
+
+    def validate_prefix(
+        self,
+        sparql: str
+    ) -> bool:
+
+        sparql_upper = sparql.upper()
+
+        return "PREFIX HC:" in sparql_upper
+
+    def validate_select(
+        self,
+        sparql: str
+    ) -> bool:
+
+        sparql_upper = sparql.upper()
+
+        return (
+            sparql_upper.strip().startswith("PREFIX")
+            and "SELECT" in sparql_upper
+        )
+
+    def validate_execution(
+        self,
+        sparql: str
+    ):
+
+        graph = Graph()
+
+        graph.parse(
+            self.ontology.owl_file,
+            format="xml"
+        )
+
+        try:
+
+            rows = graph.query(sparql)
+
+            results = []
+
+            for row in rows:
+
+                results.append([str(x) for x in row])
+
+            return {
+                "valid": True,
+                "results": results
+            }
+
+        except Exception as e:
+
+            return {
+                "valid": False,
+                "error": str(e)
+            }
+
+    def validate(
+        self,
+        sparql: str
+    ):
+
+        if not self.validate_prefix(sparql):
+
+            return {
+                "valid": False,
+                "error": "Missing PREFIX"
+            }
+
+        if not self.validate_select(sparql):
+
+            return {
+                "valid": False,
+                "error": "Not a SELECT query"
+            }
+
+        return self.validate_execution(sparql)
+
+    def repair(
+        self,
+        question: str,
+        broken_query: str,
+        error: str
+    ):
+
+        repair_prompt = f"""
+You generated an invalid SPARQL query.
+
+Question:
+
+{question}
+
+Broken Query:
+
+{broken_query}
+
+Validation Error:
+
+{error}
+
+Fix the query.
+
+Return ONLY SPARQL.
+
+Namespace:
+
+PREFIX hc:
+<{self.namespace}>
+"""
+
+        response = self.llm.invoke(repair_prompt)
+
+        repaired = self.clean_sparql(response.content)
+
+        return repaired
+
+    def generate_and_validate(
+        self,
+        question: str,
+        max_attempts: int = 3
+    ):
+
+        sparql = self.generate(question)
+        validation = {"valid": False, "error": "No attempts made"}
+
+        for attempt in range(max_attempts):
+
+            validation = self.validate(sparql)
+
+            if validation["valid"]:
+
+                return {
+                    "question": question,
+                    "sparql": sparql,
+                    "results": validation["results"],
+                    "attempts": attempt + 1
+                }
+
+            sparql = self.repair(
+                question,
+                sparql,
+                validation["error"]
+            )
+
+        return {
+            "question": question,
+            "status": "failed",
+            "sparql": sparql,
+            "error": validation["error"]
+        }
+
+
+# ==============================================
+# STANDALONE TEST
+# ==============================================
+
+if __name__ == "__main__":
+
+    from load_ontology import (
+
+        HealthcareOntology
+
+    )
+
+    ontology = (
+
+        HealthcareOntology()
+    )
+
+    generator = (
+
+        SparqlGenerator(
+
+            ontology
+        )
+    )
+
+    question = (
+
+        "Show all patients "
+
+        "diagnosed with "
+
+        "hypertension"
+    )
+
+    print(
+
+        "\nQuestion:\n"
+
+    )
+
+    print(
+
+        question
+    )
+
+    print(
+
+        "\nGenerated SPARQL:\n"
+
+    )
+
+    print(
+
+        generator.generate(
+
+            question
+        )
+    )
+

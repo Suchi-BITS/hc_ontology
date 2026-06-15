@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+neo4j
+owlready2
+ollama
+python-dotenv
+langchain
+langchain-ollama

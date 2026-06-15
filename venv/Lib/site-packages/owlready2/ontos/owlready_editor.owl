@@ -1,0 +1,209 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+     xml:base="http://www.w3.org/2002/07/owl"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:owlready_editor="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#"
+     xmlns:owlready_ontology="http://www.lesfleursdunormal.fr/static/_downloads/owlready_ontology.owl#">
+    <Ontology rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl"/>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Annotation properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_classes -->
+
+    <AnnotationProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_classes">
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_field_args -->
+
+    <AnnotationProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_field_args">
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_properties -->
+
+    <AnnotationProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_properties">
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+    </AnnotationProperty>
+    
+
+
+    <!-- http://www.w3.org/2000/01/rdf-schema#comment -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2000/01/rdf-schema#comment"/>
+    
+
+
+    <!-- http://www.w3.org/2000/01/rdf-schema#isDefinedBy -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2000/01/rdf-schema#isDefinedBy"/>
+    
+
+
+    <!-- http://www.w3.org/2000/01/rdf-schema#label -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2000/01/rdf-schema#label"/>
+    
+
+
+    <!-- http://www.w3.org/2000/01/rdf-schema#seeAlso -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2000/01/rdf-schema#seeAlso"/>
+    
+
+
+    <!-- http://www.w3.org/2002/07/owl#backwardCompatibleWith -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2002/07/owl#backwardCompatibleWith"/>
+    
+
+
+    <!-- http://www.w3.org/2002/07/owl#deprecated -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2002/07/owl#deprecated"/>
+    
+
+
+    <!-- http://www.w3.org/2002/07/owl#incompatibleWith -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2002/07/owl#incompatibleWith"/>
+    
+
+
+    <!-- http://www.w3.org/2002/07/owl#priorVersion -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2002/07/owl#priorVersion"/>
+    
+
+
+    <!-- http://www.w3.org/2002/07/owl#versionInfo -->
+
+    <AnnotationProperty rdf:about="http://www.w3.org/2002/07/owl#versionInfo"/>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Data properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_force_functional -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_force_functional">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_order -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_order">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_rename -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_rename">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#normalizedString"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_show_in_tree -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_show_in_tree">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_visible_by_default -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_attribute_visible_by_default">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_langs -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_langs">
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#normalizedString"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_field -->
+
+    <DatatypeProperty rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#editor_restrict_to_field">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#normalizedString"/>
+    </DatatypeProperty>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Classes
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig -->
+
+    <Class rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorAttributeConfig"/>
+    
+
+
+    <!-- http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorConfig -->
+
+    <Class rdf:about="http://www.lesfleursdunormal.fr/static/_downloads/owlready_editor.owl#EditorConfig"/>
+</rdf:RDF>
+
+
+
+<!-- Generated by the OWL API (version 4.5.9.2019-02-01T07:24:44Z) https://github.com/owlcs/owlapi -->
+
