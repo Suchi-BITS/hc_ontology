@@ -1,0 +1,29 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+shapes:DoctorShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Doctor ;
+    sh:node shapes:PersonShape ;
+    sh:property [
+        sh:path hc:specialization ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Doctor must have a specialization." ;
+    ] ;
+    sh:property [
+        sh:path hc:doctorLicenseNumber ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Doctor should have a doctorLicenseNumber." ;
+    ] ;
+    sh:property [
+        sh:path hc:worksInDepartment ;
+        sh:class hc:Department ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Doctor should be assigned to a department." ;
+    ] .

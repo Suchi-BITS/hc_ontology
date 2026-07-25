@@ -1,0 +1,40 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+shapes:MedicationShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Medication ;
+    sh:property [
+        sh:path hc:medicationName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Medication should have a medicationName." ;
+    ] ;
+    sh:property [
+        sh:path hc:medicationCode ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Info ;
+        sh:message "Prefer providing a medicationCode when available." ;
+    ] .
+
+# Business rule OWL restrictions cannot express: do not prescribe a drug
+# the patient is allergic to (allergyToMedication ∩ containsMedication).
+shapes:PrescriptionAllergyConflictShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Prescription ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Prescription must not contain a medication the patient is allergic to." ;
+        sh:select """
+            PREFIX hc: <http://example.org/healthcare-hospital.owl#>
+            SELECT $this WHERE {
+                $this hc:prescribedFor ?patient .
+                $this hc:containsMedication ?med .
+                ?patient hc:hasAllergy ?allergy .
+                ?allergy hc:allergyToMedication ?med .
+            }
+        """ ;
+    ] .

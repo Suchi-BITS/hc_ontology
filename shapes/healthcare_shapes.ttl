@@ -1,0 +1,23 @@
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:   <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+# Master shapes graph — shared / structural constraints.
+# Domain-specific rules live in patient/doctor/diagnosis/treatment/medication files.
+
+shapes:HospitalShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Hospital ;
+    sh:property [
+        sh:path hc:hospitalName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Hospital must have a hospitalName." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasDepartment ;
+        sh:class hc:Department ;
+        sh:minCount 1 ;
+        sh:message "Hospital must have at least one department." ;
+    ] .

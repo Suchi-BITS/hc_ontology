@@ -1,0 +1,42 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+shapes:PatientShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Patient ;
+    sh:node shapes:PersonShape ;
+    sh:property [
+        sh:path hc:firstName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Patient must have a firstName." ;
+    ] ;
+    sh:property [
+        sh:path hc:dateOfBirth ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Patient must have a dateOfBirth." ;
+    ] ;
+    sh:property [
+        sh:path hc:bloodGroup ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:pattern "^(A|B|AB|O)[+-]$" ;
+        sh:message "Patient bloodGroup must be a valid ABO type (e.g. O+, A-)." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasDiagnosis ;
+        sh:class hc:Diagnosis ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Patient should have at least one diagnosis." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasMedicalRecord ;
+        sh:class hc:MedicalRecord ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Patient should have a medical record." ;
+    ] .

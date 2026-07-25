@@ -1,0 +1,38 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+# Reusable base shape for the Person hierarchy (Patient, Doctor, Nurse, …).
+# No sh:targetClass here — domain shapes compose it via sh:node.
+
+shapes:PersonShape
+    a sh:NodeShape ;
+    sh:property [
+        sh:path hc:firstName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Person should have a firstName." ;
+    ] ;
+    sh:property [
+        sh:path hc:lastName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Person should have a lastName." ;
+    ] ;
+    sh:property [
+        sh:path hc:gender ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Person should have a gender." ;
+    ] ;
+    sh:property [
+        sh:path hc:dateOfBirth ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Person should have a dateOfBirth." ;
+    ] .

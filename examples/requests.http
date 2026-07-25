@@ -1,0 +1,112 @@
+### Healthcare Ontology API — example requests
+### Use with VS Code REST Client, IntelliJ HTTP Client, or copy curl commands.
+
+@baseUrl = http://127.0.0.1:8000
+# @apiKey = your-key-here
+
+### System
+GET {{baseUrl}}/
+Accept: application/json
+
+###
+GET {{baseUrl}}/health
+
+###
+GET {{baseUrl}}/stats
+
+### Ontology
+GET {{baseUrl}}/classes
+
+###
+GET {{baseUrl}}/patients
+
+###
+GET {{baseUrl}}/search?q=hypertension
+
+### SPARQL
+POST {{baseUrl}}/sparql
+Content-Type: application/json
+
+{
+  "query": "PREFIX hc: <http://example.org/healthcare-hospital.owl#> SELECT ?patient WHERE { ?patient rdf:type hc:Patient }"
+}
+
+### LLM → SPARQL (slow: 1-3 min)
+POST {{baseUrl}}/llm-query
+Content-Type: application/json
+
+{
+  "question": "Which patients have hypertension?"
+}
+
+### Neo4j
+GET {{baseUrl}}/neo4j/health
+
+###
+POST {{baseUrl}}/sparql-to-cypher
+Content-Type: application/json
+
+{
+  "query": "SELECT ?patient WHERE { ?patient rdf:type :Patient }"
+}
+
+###
+POST {{baseUrl}}/nl-to-cypher
+Content-Type: application/json
+
+{
+  "question": "List all patients"
+}
+
+###
+POST {{baseUrl}}/execute-cypher
+Content-Type: application/json
+
+{
+  "cypher": "MATCH (n:Patient) RETURN n.name AS name LIMIT 10"
+}
+
+### Embeddings (run POST /embedding/sync first)
+POST {{baseUrl}}/embedding/sync
+
+###
+GET {{baseUrl}}/embedding/health
+
+###
+GET {{baseUrl}}/embedding/search?query=diabetes&top_k=5
+
+###
+GET {{baseUrl}}/metrics
+
+###
+POST {{baseUrl}}/execute-cypher
+Content-Type: application/json
+
+{
+  "cypher": "MATCH (n) DETACH DELETE n RETURN n"
+}
+
+### SHACL validation
+GET {{baseUrl}}/validation/health
+
+###
+POST {{baseUrl}}/validate/ontology
+Content-Type: application/json
+
+{}
+
+###
+POST {{baseUrl}}/validate
+Content-Type: application/json
+
+{
+  "data": "@prefix hc: <http://example.org/healthcare-hospital.owl#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\nhc:PatientX a hc:Patient ;\n  hc:firstName \"X\"^^xsd:string ;\n  hc:bloodGroup \"O+\"^^xsd:string .",
+  "format": "turtle",
+  "shape_files": ["patient_shapes.ttl"]
+}
+
+###
+GET {{baseUrl}}/validation/report
+
+###
+GET {{baseUrl}}/validation/report?format=html

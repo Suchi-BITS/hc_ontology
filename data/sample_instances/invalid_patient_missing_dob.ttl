@@ -1,0 +1,9 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Invalid: missing required dateOfBirth (PatientShape Violation).
+hc:PatientNoDob a hc:Patient ;
+    hc:firstName "Bob"^^xsd:string ;
+    hc:lastName "Smith"^^xsd:string ;
+    hc:gender "male"^^xsd:string ;
+    hc:bloodGroup "A+"^^xsd:string .

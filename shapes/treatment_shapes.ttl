@@ -1,0 +1,28 @@
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:   <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+shapes:TreatmentShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Treatment ;
+    sh:property [
+        sh:path hc:performedByDoctor ;
+        sh:class hc:Doctor ;
+        sh:minCount 1 ;
+        sh:message "Treatment must have performedByDoctor." ;
+    ] ;
+    sh:property [
+        sh:path hc:treatmentName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Treatment should have a treatmentName." ;
+    ] ;
+    sh:property [
+        sh:path hc:treatmentStatus ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Info ;
+        sh:in ( "Planned" "Active" "Completed" "Cancelled" ) ;
+        sh:message "treatmentStatus should be one of Planned, Active, Completed, Cancelled." ;
+    ] .

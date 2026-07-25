@@ -1,0 +1,14 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+# Canonical prefixes for the healthcare SHACL package.
+# Each shape module still declares its own @prefix (Turtle scope is per-file);
+# this file documents the shared vocabulary and marks the package root.
+
+shapes: a owl:Ontology ;
+    rdfs:label "Healthcare SHACL shapes vocabulary" ;
+    rdfs:comment "Shared IRI prefixes: sh, owl, rdfs, xsd, hc, shapes." .

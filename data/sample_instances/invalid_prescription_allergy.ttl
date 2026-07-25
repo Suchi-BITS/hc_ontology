@@ -1,0 +1,20 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Invalid: prescription contains a medication the patient is allergic to.
+hc:PatientAllergic a hc:Patient ;
+    hc:firstName "Casey"^^xsd:string ;
+    hc:lastName "Lee"^^xsd:string ;
+    hc:dateOfBirth "1985-01-01"^^xsd:string ;
+    hc:bloodGroup "B+"^^xsd:string ;
+    hc:hasAllergy hc:AllergyPenicillin .
+
+hc:AllergyPenicillin a hc:Allergy ;
+    hc:allergyToMedication hc:Amoxicillin .
+
+hc:Amoxicillin a hc:Medication ;
+    hc:medicationName "Amoxicillin"^^xsd:string .
+
+hc:RxConflict a hc:Prescription ;
+    hc:prescribedFor hc:PatientAllergic ;
+    hc:containsMedication hc:Amoxicillin .

@@ -1,287 +1,144 @@
-# system_design_document.md
-
-# Healthcare Ontology Platform – System Design Document
+# Healthcare Ontology Platform — System Design
 
 ## 1. Overview
 
-The Healthcare Ontology Platform provides ontology-driven healthcare intelligence using semantic technologies, graph databases, and local large language models.
+The platform delivers ontology-driven healthcare intelligence using semantic web technologies, graph databases, and local LLMs (Ollama).
 
-The system supports:
-
-* Ontology exploration
-* RDF/SPARQL querying
-* Natural language question answering
-* Neo4j graph export
-* SPARQL-to-Cypher translation
-* Semantic vector search using embeddings
+**Capabilities:**
+- OWL ontology exploration
+- RDF/SPARQL querying
+- Natural language → SPARQL / Cypher
+- Neo4j export and execution
+- Semantic vector search
 
 ---
 
-# 2. High-Level Architecture
+## 2. Architecture
 
 ```
-                        User
-                          │
-                          ▼
-                     FastAPI APIs
-                          │
-     ┌────────────────────┼─────────────────────┐
-     │                    │                     │
-     ▼                    ▼                     ▼
-HealthcareOntology   SparqlGenerator   EmbeddingService
-     │                    │                     │
-     ▼                    ▼                     ▼
- Owlready2           Ollama Qwen         Ollama Embeddings
-     │                    │                     │
-     ▼                    ▼                     ▼
- healthcare.owl       SPARQL Query          Neo4j XC
-     │                    │                     │
-     ▼                    ▼                     ▼
-   RDFLib            RDF Execution        Vector Search
-```
+                    User / Streamlit UI
+                            │
+                            ▼
+                      FastAPI (api.py)
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ▼                   ▼                   ▼
+  HealthcareOntology   SparqlGenerator    EmbeddingService
+        │                   │                   │
+        ▼                   ▼                   ▼
+   Owlready2            Ollama LLM         Ollama Embeddings
+        │                   │                   │
+        ▼                   ▼                   ▼
+ healthcare.owl         SPARQL            Neo4j Vector Index
+        │                   │                   │
+        ▼                   ▼                   ▼
+     RDFLib              Validation         Similarity Search
 
----
-
-# 3. Core Components
-
-## 3.1 Ontology Layer
-
-File:
-
-```
-load_ontology.py
-```
-
-Responsibilities:
-
-* Load OWL ontology
-* Extract classes
-* Extract object properties
-* Extract individuals
-* Execute SPARQL
-* Perform graph traversal
-
-Technology:
-
-* Owlready2
-* RDFLib
-
----
-
-## 3.2 API Layer
-
-File:
-
-```
-api.py
-```
-
-Responsibilities:
-
-* Expose REST endpoints
-* Swagger documentation
-* Integrate ontology services
-* Integrate embeddings
-
-Technology:
-
-* FastAPI
-* Pydantic
-
----
-
-## 3.3 Natural Language Layer
-
-File:
-
-```
-sparql_generator.py
-```
-
-Responsibilities:
-
-* Generate SPARQL from English questions
-* Validate generated SPARQL
-* Repair invalid queries
-
-Technology:
-
-* LangChain
-* Ollama
-* Qwen
-
-Pipeline:
-
-```
-Question
-↓
-Prompt Construction
-↓
-Ollama
-↓
-SPARQL
-↓
-Validation
-↓
-Repair
+  SparqlToCypher ──► Neo4j (Cypher)
+  CypherGenerator ──► Neo4j (Cypher)
 ```
 
 ---
 
-## 3.4 Knowledge Graph Layer
+## 3. Project layout
 
-File:
-
-```
-healthcare_ontology.owl
-```
-
-Contains:
-
-Classes:
-
-* Patient
-* Doctor
-* Diagnosis
-* Treatment
-* Appointment
-
-Object Properties:
-
-* hasDiagnosis
-* diagnosedBy
-* requiresTreatment
-
-Data Properties:
-
-* firstName
-* lastName
-* bloodGroup
+| Path | Role |
+|------|------|
+| `api.py` | Application factory, router registration |
+| `streamlit_app.py` | Course demo UI |
+| `core/` | Config, auth, schemas, SHACL, dependencies |
+| `services/load_ontology.py` | OWL loading & SPARQL |
+| `services/sparql_generator.py` | NL → SPARQL + validation |
+| `services/sparql_to_cypher.py` | SPARQL → Cypher |
+| `services/cypher_generator.py` | NL → Cypher |
+| `services/embedding_service.py` | Embeddings + vector search |
+| `services/neo4j_exporter.py` | OWL → Neo4j bulk export |
+| `routers/` | HTTP route modules |
+| `scripts/` | Ontology generation / data seeding / setup |
+| `shapes/` | SHACL constraints |
+| `data/sample_instances/` | RDF fixtures for SHACL tests |
 
 ---
 
-## 3.5 Neo4j Integration
+## 4. API categories
 
-Files:
+### System — `routers/system.py`
+- `GET /`, `/health`, `/stats`
 
-```
-neo4j_exporter.py
-sparql_to_cypher.py
-```
+### Ontology — `routers/ontology.py`, `patients.py`, `doctors.py`, `clinical.py`
+- Metadata, domain resources, text search (`/search?q=`)
 
-Responsibilities:
+### SPARQL — `routers/sparql.py`
+- `POST /sparql`, `/llm-query`, `/nl-query` (deprecated)
 
-* RDF → Cypher export
-* SPARQL → Cypher translation
-* Neo4j connectivity
+### Neo4j — `routers/neo4j.py`
+- `/neo4j/*`, `/sparql-to-cypher`, `/nl-to-cypher`, `/execute-cypher`
+
+### Embeddings — `routers/embedding.py`
+- `/embedding/sync`, `/embedding/health`, `/embedding/search`, `/embedding/similar/{concept}`
 
 ---
 
-## 3.6 Embedding Layer
+## 5. Data flows
 
-File:
-
+### NL → Answer (Cypher path)
 ```
-embedding_service.py
+Question → CypherGenerator → Cypher → Neo4j → JSON results
 ```
 
-Responsibilities:
-
-* Annotation extraction
-* Embedding generation
-* Vector storage
-* Similarity search
-
-Pipeline:
-
+### NL → Answer (SPARQL path)
 ```
-OWL
-↓
-Annotation Extraction
-↓
-Ollama nomic-embed-text
-↓
-Neo4j Vector Index
-↓
-Similarity Search
+Question → SparqlGenerator → SPARQL → RDFLib → JSON results
+```
+
+### Semantic search
+```
+OWL annotations → Ollama embed → Neo4j OntologyConcept nodes
+Query text → embed → vector index → ranked concepts
 ```
 
 ---
 
-# 4. API Categories
-
-System APIs
-
-* /
-* /health
-* /stats
-
-Ontology APIs
-
-* /classes
-* /individuals
-* /object-properties
-* /data-properties
-
-Domain APIs
-
-* /patients
-* /doctors
-* /appointments
-* /diagnoses
-* /treatments
-
-Knowledge Graph APIs
-
-* /rdf/triples
-* /graph-summary
-
-SPARQL APIs
-
-* /sparql
-* /nl-query
-* /llm-query
-
-Neo4j APIs
-
-* /neo4j/export
-* /sparql-to-cypher
-
-Embedding APIs
-
-* /embedding/search
-* /embedding/similar
-
----
-
-# 5. Deployment Architecture
+## 6. Deployment
 
 ```
-                Docker Compose
-                        │
-      ┌─────────────────┼─────────────────┐
-      │                 │                 │
-      ▼                 ▼                 ▼
- FastAPI           Neo4j             Ollama
-   8000             7687              11434
+Docker Compose
+├── ollama:11434
+├── api:8000
+└── streamlit:8501
+
+Neo4j Desktop (host) :7687  ← bolt://host.docker.internal
 ```
 
 ---
 
-# 6. Future Improvements
+## 7. Configuration
 
-* Split api.py into routers
-* Add authentication
-* Add caching
-* Add CI/CD pipeline
-* Add automated testing
-* Add ontology versioning
+See `.env.example`. Critical variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `NEO4J_DATABASE` | Target DB name (not instance name) |
+| `OLLAMA_MODEL` | LLM for SPARQL/Cypher generation |
+| `EMBEDDING_MODEL` | Ollama embedding model |
+| `API_KEY` | Optional request authentication |
 
 ---
 
-# 7. Risks
+## 8. Known limitations
 
-* Large prompts may slow SPARQL generation.
-* Neo4j and RDF models require translation.
-* Duplicate FastAPI routes can cause conflicts.
-* Embedding synchronization should be incremental.
+- SPARQL→Cypher translator supports a subset of SPARQL (no full SPARQL 1.1)
+- LLM endpoints are synchronous and slow (1–3 min)
+- Embedding sync is full-batch, not incremental
+- `nl-query` deprecated in favor of `llm-query`
+
+---
+
+## 9. Testing & CI
+
+```bash
+pytest tests/ -v
+```
+
+GitHub Actions workflow: `.github/workflows/ci.yml`

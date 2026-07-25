@@ -1,0 +1,15 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Minimal conforming patient fixture (for shape unit tests).
+hc:PatientAlice a hc:Patient ;
+    hc:firstName "Alice"^^xsd:string ;
+    hc:lastName "Nguyen"^^xsd:string ;
+    hc:gender "female"^^xsd:string ;
+    hc:dateOfBirth "1990-04-12"^^xsd:string ;
+    hc:bloodGroup "O+"^^xsd:string ;
+    hc:hasDiagnosis hc:DxAlice ;
+    hc:hasMedicalRecord hc:MRAlice .
+
+hc:DxAlice a hc:Diagnosis .
+hc:MRAlice a hc:MedicalRecord .

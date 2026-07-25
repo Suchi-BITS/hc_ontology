@@ -1,0 +1,13 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+hc:DrOk a hc:Doctor ;
+    hc:firstName "Ada"^^xsd:string ;
+    hc:lastName "Lovelace"^^xsd:string ;
+    hc:gender "female"^^xsd:string ;
+    hc:dateOfBirth "1975-06-01"^^xsd:string ;
+    hc:specialization "Cardiology"^^xsd:string ;
+    hc:doctorLicenseNumber "DOC999"^^xsd:string ;
+    hc:worksInDepartment hc:Cardio .
+
+hc:Cardio a hc:Department .

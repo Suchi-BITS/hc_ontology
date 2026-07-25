@@ -1,0 +1,33 @@
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:   <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+shapes:DiagnosisShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Diagnosis ;
+    sh:property [
+        sh:path hc:diagnosisName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Diagnosis must have a diagnosisName." ;
+    ] ;
+    sh:property [
+        sh:path hc:diagnosisCode ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Diagnosis must have a diagnosisCode." ;
+    ] ;
+    sh:property [
+        sh:path hc:diagnosedBy ;
+        sh:class hc:Doctor ;
+        sh:minCount 1 ;
+        sh:message "Diagnosis must be linked to a doctor via diagnosedBy." ;
+    ] ;
+    sh:property [
+        sh:path hc:diagnosisForPatient ;
+        sh:class hc:Patient ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Diagnosis should reference the diagnosed patient." ;
+    ] .

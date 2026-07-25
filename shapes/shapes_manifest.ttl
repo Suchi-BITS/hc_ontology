@@ -1,0 +1,52 @@
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+# Entry-point description of the shapes package.
+# SHACL has no owl:imports equivalent for shapes — ShaclLoader.load_all_shapes()
+# recursively merges every .ttl under shapes/ into one rdflib.Graph.
+# This manifest documents the intended module set and load order.
+
+shapes:Manifest a owl:Ontology ;
+    rdfs:label "Healthcare SHACL shapes manifest" ;
+    rdfs:comment "Logical package entry; physical merge is performed by core.shacl_loader.load_all_shapes()." ;
+    shapes:module shapes:module-common-prefixes ,
+                  shapes:module-common-person ,
+                  shapes:module-healthcare ,
+                  shapes:module-patient ,
+                  shapes:module-doctor ,
+                  shapes:module-diagnosis ,
+                  shapes:module-treatment ,
+                  shapes:module-medication .
+
+shapes:module-common-prefixes
+    rdfs:label "common/prefixes.ttl" ;
+    rdfs:seeAlso <common/prefixes.ttl> .
+
+shapes:module-common-person
+    rdfs:label "common/person_shapes.ttl" ;
+    rdfs:seeAlso <common/person_shapes.ttl> .
+
+shapes:module-healthcare
+    rdfs:label "healthcare_shapes.ttl" ;
+    rdfs:seeAlso <healthcare_shapes.ttl> .
+
+shapes:module-patient
+    rdfs:label "patient_shapes.ttl" ;
+    rdfs:seeAlso <patient_shapes.ttl> .
+
+shapes:module-doctor
+    rdfs:label "doctor_shapes.ttl" ;
+    rdfs:seeAlso <doctor_shapes.ttl> .
+
+shapes:module-diagnosis
+    rdfs:label "diagnosis_shapes.ttl" ;
+    rdfs:seeAlso <diagnosis_shapes.ttl> .
+
+shapes:module-treatment
+    rdfs:label "treatment_shapes.ttl" ;
+    rdfs:seeAlso <treatment_shapes.ttl> .
+
+shapes:module-medication
+    rdfs:label "medication_shapes.ttl" ;
+    rdfs:seeAlso <medication_shapes.ttl> .
