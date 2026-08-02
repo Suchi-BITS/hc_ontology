@@ -48,4 +48,18 @@ def get_settings():
         "query_timeout_seconds": float(os.getenv("QUERY_TIMEOUT_SECONDS", "30")),
         "llm_rate_limit_per_minute": int(os.getenv("LLM_RATE_LIMIT_PER_MINUTE", "10")),
         "query_cache_ttl_seconds": float(os.getenv("QUERY_CACHE_TTL_SECONDS", "300")),
+        "agent_max_retries": int(os.getenv("AGENT_MAX_RETRIES", "3")),
+        "agent_force_hitl": os.getenv("AGENT_FORCE_HITL", "false").lower() == "true",
+        # Enterprise
+        "default_tenant_id": os.getenv("DEFAULT_TENANT_ID", "default"),
+        "rbac_enabled": os.getenv("RBAC_ENABLED", "true").lower() == "true",
+        "guardrails_enabled": os.getenv("GUARDRAILS_ENABLED", "true").lower() == "true",
+        "cost_budget_usd_per_day": float(os.getenv("COST_BUDGET_USD_PER_DAY", "25")),
+        "langchain_tracing": os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true",
+        "langchain_api_key": os.getenv("LANGCHAIN_API_KEY", "") or os.getenv("LANGSMITH_API_KEY", ""),
+        "langchain_project": os.getenv("LANGCHAIN_PROJECT", "healthcare-ontology-agents"),
+        "langsmith_endpoint": os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"),
+        "otel_enabled": os.getenv("OTEL_ENABLED", "false").lower() == "true",
+        "otel_service_name": os.getenv("OTEL_SERVICE_NAME", "healthcare-ontology-api"),
+        "otel_exporter_otlp_endpoint": os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
     }

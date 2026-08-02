@@ -61,3 +61,9 @@ def test_openapi_has_embedding_routes(client):
     assert "/embedding/sync" in paths
     assert "/embedding/search" in paths
     assert "/nl-to-cypher" in paths
+
+
+def test_openapi_has_document_routes(client):
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "/documents/upload" in paths
+    assert "/documents/graphrag/retrieve" in paths

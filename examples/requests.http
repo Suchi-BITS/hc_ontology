@@ -110,3 +110,88 @@ GET {{baseUrl}}/validation/report
 
 ###
 GET {{baseUrl}}/validation/report?format=html
+
+### Multi-agent LangGraph
+GET {{baseUrl}}/agent/health
+
+###
+POST {{baseUrl}}/agent/query
+Content-Type: application/json
+
+{
+  "question": "List patients with diabetes",
+  "session_id": "demo-session-1",
+  "require_human_approval": false,
+  "max_retries": 3
+}
+
+### HITL: force approval before execution
+POST {{baseUrl}}/agent/query
+Content-Type: application/json
+
+{
+  "question": "List all patients",
+  "session_id": "demo-session-1",
+  "require_human_approval": true
+}
+
+### Resume after HITL (replace thread_id from previous response)
+POST {{baseUrl}}/agent/resume
+Content-Type: application/json
+
+{
+  "thread_id": "REPLACE_THREAD_ID",
+  "decision": "approved",
+  "feedback": "Looks safe"
+}
+
+###
+GET {{baseUrl}}/agent/state/REPLACE_THREAD_ID
+
+###
+GET {{baseUrl}}/agent/memory/demo-session-1
+
+### Enterprise
+GET {{baseUrl}}/enterprise/health
+
+###
+GET {{baseUrl}}/enterprise/tenants
+X-Role: admin
+
+###
+GET {{baseUrl}}/enterprise/ontologies
+X-Tenant-ID: clinic-a
+X-Role: analyst
+
+###
+POST {{baseUrl}}/enterprise/hybrid-search
+Content-Type: application/json
+X-Tenant-ID: default
+X-Role: analyst
+
+{
+  "query": "diabetes diagnosis",
+  "top_k": 5
+}
+
+###
+POST {{baseUrl}}/enterprise/eval/run
+X-Role: analyst
+
+###
+POST {{baseUrl}}/enterprise/workflows/run
+Content-Type: application/json
+X-Tenant-ID: default
+X-Role: admin
+
+{
+  "name": "ontology_health",
+  "params": {}
+}
+
+###
+GET {{baseUrl}}/enterprise/monitoring
+X-Role: viewer
+
+###
+GET {{baseUrl}}/enterprise/metrics

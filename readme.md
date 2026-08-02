@@ -17,6 +17,7 @@ streamlit run streamlit_app.py
 | LLM | Natural language → SPARQL (Ollama + LangChain) |
 | Neo4j | Export, SPARQL→Cypher, NL→Cypher, execute Cypher |
 | Embeddings | Ollama `nomic-embed-text` + Neo4j vector index |
+| Multi-agent | LangGraph: Planner → Ontology → Query → Validation → HITL → Execution → Response |
 
 ---
 
@@ -51,6 +52,7 @@ ollama serve
 
 ```bash
 .\venv\Scripts\activate          # Windows
+python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 uvicorn api:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -127,6 +129,30 @@ GET /embedding/search?query=diabetes&top_k=5
 | GET | `/jobs/{id}` | Async LLM job status |
 | POST | `/llm-query/async` | Enqueue NL→SPARQL |
 | POST | `/nl-to-cypher/async` | Enqueue NL→Cypher |
+
+### Multi-agent (LangGraph)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/agent/health` | Graph + feature flags |
+| POST | `/agent/query` | Run Planner→…→Response pipeline (may pause for HITL) |
+| POST | `/agent/query/async` | Background agent run → poll `/agent/jobs/{id}` |
+| POST | `/agent/resume` | Approve/reject a paused execution |
+| GET | `/agent/state/{thread_id}` | Inspect checkpointed state |
+| GET | `/agent/memory/{session_id}` | KG conversation memory |
+
+### Enterprise
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/enterprise/health` | Capability + LangSmith/OTEL status |
+| GET | `/enterprise/tenants` | Multi-tenant catalog |
+| GET | `/enterprise/ontologies` | Multi-ontology + versions (tenant-scoped) |
+| POST | `/enterprise/hybrid-search` | Graph + vector hybrid retrieval |
+| POST | `/enterprise/eval/run` | Offline agent evaluation |
+| POST | `/enterprise/workflows/run` | Background workflows |
+| GET | `/enterprise/monitoring` | Alerts + latency/cost snapshot |
+| GET | `/enterprise/metrics` | Prometheus metrics scrape |
+
+Headers: `X-Tenant-ID`, `X-Role` (`viewer`/`analyst`/`approver`/`admin`), `X-User-ID`, optional `X-API-Key`.
 
 `POST /sparql` and `POST /execute-cypher` run the shared validator (safety → syntax → schema → LIMIT) before execution.
 

@@ -10,6 +10,8 @@ The platform delivers ontology-driven healthcare intelligence using semantic web
 - Natural language → SPARQL / Cypher
 - Neo4j export and execution
 - Semantic vector search
+- **Enterprise multi-agent orchestration (LangGraph)** — Planner, Ontology, Query,
+  Validation, Execution, Response agents with shared state, retries, HITL, and KG memory
 
 ---
 
@@ -37,6 +39,11 @@ The platform delivers ontology-driven healthcare intelligence using semantic web
 
   SparqlToCypher ──► Neo4j (Cypher)
   CypherGenerator ──► Neo4j (Cypher)
+
+  /agent/query ──► LangGraph multi-agent (shared AgentState)
+       Planner → Ontology → Query → Validation ⇄ retry
+                         → Human Gate (HITL) → Execution → Response
+                         → Neo4j AgentSession / AgentTurn memory
 ```
 
 ---
@@ -54,6 +61,7 @@ The platform delivers ontology-driven healthcare intelligence using semantic web
 | `services/cypher_generator.py` | NL → Cypher |
 | `services/embedding_service.py` | Embeddings + vector search |
 | `services/neo4j_exporter.py` | OWL → Neo4j bulk export |
+| `agents/` | LangGraph multi-agent system (state, nodes, memory, graph) |
 | `routers/` | HTTP route modules |
 | `scripts/` | Ontology generation / data seeding / setup |
 | `shapes/` | SHACL constraints |

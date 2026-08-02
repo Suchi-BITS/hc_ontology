@@ -19,11 +19,38 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run tests
-        run: pytest tests/ -v
+      - name: Unit / integration tests
+        run: pytest tests/ -v --tb=short
+        env:
+          LANGCHAIN_TRACING_V2: "false"
+          RBAC_ENABLED: "false"
+          GUARDRAILS_ENABLED: "true"
+          OTEL_ENABLED: "false"
+
+      - name: Enterprise smoke import
+        run: |
+          python - <<'PY'
+          from enterprise.guardrails import check_input
+          from enterprise.tenancy import tenant_registry
+          from enterprise.ontology_registry import ontology_registry
+          from agents.graph import build_agent_graph
+          assert not check_input("DETACH DELETE all").allowed
+          assert tenant_registry.get("default")
+          assert ontology_registry.get("hc-core")
+          build_agent_graph()
+          print("enterprise smoke ok")
+          PY
 
       - name: Type check (informational)
         continue-on-error: true
         run: |
           pip install mypy types-requests
-          mypy core services routers --ignore-missing-imports --no-error-summary || true
+          mypy core services routers enterprise agents --ignore-missing-imports --no-error-summary || true
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t healthcare-ontology-api:ci .
