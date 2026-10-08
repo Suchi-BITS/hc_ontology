@@ -1,3 +1,14 @@
+# Kubernetes manifests for the API. Assumptions (see docs/security-policy.md, section "Kubernetes"):
+#   * The image is built and pushed by .github/workflows/cd.yml. Replace REPLACE_WITH_OWNER and pin the tag
+#     (or, better, a digest: image: ...@sha256:<digest>) to the release you deploy. Never use :latest.
+#   * The Secret `healthcare-ontology-secrets` is created OUTSIDE this file, for example:
+#       kubectl -n healthcare-ontology create secret generic healthcare-ontology-secrets \
+#         --from-literal=NEO4J_PASSWORD=... --from-literal=API_KEY=... [--from-literal=OPENAI_API_KEY=...]
+#     No Secret object is defined here on purpose: applying a manifest with empty values would overwrite a real one.
+#   * ENVIRONMENT=production: the API refuses to start without credentials (API_KEY above). Open development
+#     mode is not available here.
+#   * Neo4j is assumed to exist as the Service `neo4j` in this namespace. This file does not deploy it.
+#   * TLS and authentication at the Ingress are the operator's responsibility; this file only routes.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -11,12 +22,18 @@ metadata:
 data:
   APP_NAME: "Healthcare Ontology API"
   ENVIRONMENT: "production"
-  OLLAMA_MODEL: "qwen2.5:latest"
-  EMBEDDING_MODEL: "nomic-embed-text:latest"
-  NEO4J_DATABASE: "hcontology"
-  LANGCHAIN_TRACING_V2: "true"
+  ALLOW_OPEN_DEVELOPMENT_MODE: "false"
+  SPARQL_QUERY_TIMEOUT_SECONDS: "15"
+  OPENAI_MODEL: "gpt-4.1-mini"
+  OPENAI_EMBEDDING_MODEL: "text-embedding-3-small"
+  OPENAI_EMBEDDING_DIMENSIONS: "1536"
+  NEO4J_DATABASE: "neo4j"
+  # Tracing sends prompts and answers to a third party (LangSmith). Off unless an operator turns it on, together with
+  # a LANGCHAIN_API_KEY in the Secret.
+  LANGCHAIN_TRACING_V2: "false"
   LANGCHAIN_PROJECT: "healthcare-ontology-agents"
-  OTEL_ENABLED: "true"
+  # Enable only with a collector configured (OTEL_EXPORTER_OTLP_ENDPOINT).
+  OTEL_ENABLED: "false"
   OTEL_SERVICE_NAME: "healthcare-ontology-api"
   RBAC_ENABLED: "true"
   GUARDRAILS_ENABLED: "true"
@@ -24,18 +41,6 @@ data:
   AGENT_MAX_RETRIES: "3"
   COST_BUDGET_USD_PER_DAY: "25"
   LLM_RATE_LIMIT_PER_MINUTE: "20"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: healthcare-ontology-secrets
-  namespace: healthcare-ontology
-type: Opaque
-stringData:
-  NEO4J_PASSWORD: "change-me"
-  API_KEY: ""
-  # Set via: kubectl create secret generic ... --from-literal=LANGCHAIN_API_KEY=...
-  LANGCHAIN_API_KEY: ""
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -58,10 +63,28 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/enterprise/metrics"
     spec:
+      automountServiceAccountToken: false      # the API never calls the Kubernetes API
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001                       # the `app` user created in the Dockerfile
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
-          image: healthcare-ontology-api:latest
+          image: ghcr.io/REPLACE_WITH_OWNER/healthcare-ontology-api:1.0.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true       # writable paths are the emptyDir mounts below
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: validation-reports
+              mountPath: /app/validation_reports
           ports:
             - containerPort: 8000
               name: http
@@ -75,10 +98,10 @@ spec:
               value: "bolt://neo4j:7687"
             - name: NEO4J_USERNAME
               value: "neo4j"
-            - name: OLLAMA_HOST
-              value: "http://ollama:11434"
-            - name: OWL_FILE_PATH
-              value: "healthcare_ontology.owl"
+            - name: ONTOLOGY_SCHEMA_FILE
+              value: "ontology/healthcare_schema.ttl"
+            - name: SAMPLE_DATA_FILE
+              value: "data/sample_data.ttl"
           readinessProbe:
             httpGet:
               path: /health
@@ -98,6 +121,14 @@ spec:
             limits:
               cpu: "1"
               memory: "2Gi"
+              ephemeral-storage: "256Mi"
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: validation-reports
+          emptyDir:
+            sizeLimit: 64Mi
 ---
 apiVersion: v1
 kind: Service

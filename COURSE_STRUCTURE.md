@@ -20,7 +20,7 @@
 
 - Classes: Patient, Doctor, Diagnosis, Treatment
 - Object vs data properties
-- **Files:** `scripts/generate_hc_ontology.py`, `healthcare_ontology.owl`
+- **Files:** `scripts/generate_hc_ontology.py`, `ontology/healthcare_schema.ttl`, `scripts/generate_sample_data.py`, `data/sample_data.ttl`
 - **Lab:** Open OWL in Protege; `GET /classes`, `/graph-summary`
 
 ---
@@ -42,7 +42,7 @@
 
 ## Module 5 — Natural language → SPARQL (90 min)
 
-- LangChain + Ollama prompt engineering
+- LangChain + OpenAI prompt engineering
 - Validation & repair loop (`services/sparql_generator.py`)
 - **Lab:** `POST /llm-query` — *patients with hypertension*
 - **Note:** Expect 1–3 min response time
@@ -74,9 +74,10 @@
 
 ## Module 9 — Semantic embeddings (90 min)
 
-- Ollama `nomic-embed-text`
+- OpenAI `text-embedding-3-small` (1536 dimensions)
 - Neo4j vector index
 - **Lab:** `POST /embedding/sync`, `GET /embedding/search`
+- **Instructor script:** [docs/UDEMY_GRAPH_ALGORITHMS_SCRIPT.md](docs/UDEMY_GRAPH_ALGORITHMS_SCRIPT.md) (k-NN, RRF, hybrid retrieval, GraphRAG — ~30 min)
 
 ---
 
@@ -85,6 +86,7 @@
 - Constraints vs schema (SHACL shapes)
 - **Files:** `shapes/*.ttl`, `core/shacl_*.py`, `routers/shacl.py`
 - **Lab:** `POST /validate/ontology`, `POST /validate`, `GET /validation/report`
+- **Instructor script:** [docs/UDEMY_REASONING_SCRIPT.md](docs/UDEMY_REASONING_SCRIPT.md) (deductive reasoning, OWL/RDFS inference, SHACL rules, chaining, graph traversal)
 
 ---
 
@@ -116,7 +118,7 @@
 |------------|------------------|
 | Ontology | What is the difference between `hasDiagnosis` and `diagnosisName`? |
 | SPARQL | Write a query listing all doctors |
-| Neo4j | Why is instance name `hc` different from database `hcontology`? |
+| Neo4j | Why is the Neo4j graph a *derived projection* and RDF the authority? |
 | LLM | What does the repair loop in `sparql_generator` do? |
 | Safety | Why does `/execute-cypher` reject `DETACH DELETE`? |
 

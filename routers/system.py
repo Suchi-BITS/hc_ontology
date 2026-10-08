@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.auth import verify_api_key
+from core.authz import Permission, require_permission
+from core.security import Identity, authenticate_request
 from core.dependencies import get_ontology
 from core.job_store import job_store
 from core.metrics import metrics
 
-router = APIRouter(tags=["System"], dependencies=[Depends(verify_api_key)])
+# "/" and "/health" are public on purpose (orchestrator probes carry no credentials and reveal nothing).
+router = APIRouter(tags=["System"])
+_AUTH = [Depends(verify_api_key)]
 
 
 @router.get("/")
@@ -23,7 +27,7 @@ def health():
     return {"status": "healthy"}
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[*_AUTH, Depends(require_permission(Permission.ONTOLOGY_READ))])
 def stats():
     ontology = get_ontology()
     return {
@@ -34,15 +38,15 @@ def stats():
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[*_AUTH, Depends(require_permission(Permission.METRICS_READ))])
 def get_metrics():
     """Validation / LLM pipeline counters for demos and ops."""
     return metrics.snapshot()
 
 
-@router.get("/jobs/{job_id}")
-def get_job(job_id: str):
-    job = job_store.get(job_id)
+@router.get("/jobs/{job_id}", dependencies=_AUTH)
+def get_job(job_id: str, identity: Identity = Depends(authenticate_request)):
+    job = job_store.get_for_tenant(job_id, identity.tenant_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job.to_dict()

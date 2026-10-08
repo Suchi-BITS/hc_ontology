@@ -54,11 +54,12 @@ class OntologyRegistry:
         self._lock = threading.Lock()
         settings = get_settings()
         root = Path(settings["project_root"])
-        owl = Path(settings["owl_file"])
-        if not owl.is_absolute():
-            owl = root / owl
+        from core.dataset import Dataset
+
+        dataset = Dataset.default()
+        owl = dataset.schema  # the ontology proper; the checksum below also covers the sample data
         now = datetime.now(timezone.utc).isoformat()
-        checksum = _checksum(owl)
+        checksum = dataset.checksum()[:16]
         v1 = OntologyVersion(
             version="1.0.0",
             created_at=now,
@@ -71,7 +72,7 @@ class OntologyRegistry:
             "hc-core": OntologyRecord(
                 ontology_id="hc-core",
                 name="Healthcare Core",
-                tenant_ids=["default", "clinic-a", "research"],
+                tenant_ids=["default", "abhigya-ai-lab", "clinic-a", "research"],
                 active_version="1.0.0",
                 versions=[v1],
                 description="Primary hospital OWL ontology",

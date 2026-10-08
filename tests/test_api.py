@@ -25,20 +25,25 @@ def test_health(client):
 def test_classes(client):
     r = client.get("/classes")
     assert r.status_code == 200
-    assert isinstance(r.json(), list)
-    assert "Patient" in r.json()
+    assert {"Patient", "Practitioner", "Encounter", "Condition", "Observation", "CodeConcept"} <= set(r.json())
 
 
 def test_patients(client):
     r = client.get("/patients")
     assert r.status_code == 200
-    assert isinstance(r.json(), list)
+    by_name = {p["name"]: p for p in r.json()}
+    assert set(by_name) == {"PatientJohn", "PatientEmma", "PatientDavid", "PatientAlice", "PatientBob"}
+    assert (by_name["PatientJohn"]["first_name"], by_name["PatientJohn"]["last_name"]) == ("John", "Doe")
+    assert by_name["PatientJohn"]["blood_group"] == "O+"
 
 
 def test_ontology_search(client):
     r = client.get("/search", params={"q": "patient"})
     assert r.status_code == 200
-    assert "results" in r.json()
+    results = set(r.json()["results"])
+    assert {"PatientJohn", "PatientEmma", "PatientDavid", "PatientAlice", "PatientBob"} <= results
+    assert all("patient" in name.lower() for name in results)  # substring search over individual names
+    assert "DrSmith" not in results
 
 
 def test_sparql_rdf_type_to_cypher():

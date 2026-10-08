@@ -1,0 +1,12 @@
+# CQ04: Which patients have a diagnosis with a given code? (?system and ?code are bound by the caller)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?patient WHERE {
+  ?patient hc:hasDiagnosis ?dx .
+  ?dx hc:hasCode ?c .
+  ?c hc:codeSystem ?system ;
+     hc:codeValue  ?code .
+}
+ORDER BY ?patient

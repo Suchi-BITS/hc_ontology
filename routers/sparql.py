@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from core.auth import verify_api_key
+from core.authz import Permission, require_permission
+from core.security import request_identity
 from core.config import get_settings
 from core.dependencies import get_ontology, get_sparql_generator
 from core.errors import from_validation_result, map_query_exception
@@ -10,7 +12,10 @@ from core.rate_limit import SlidingWindowRateLimiter, client_key
 from core.schemas import LLMQueryRequest, NLQueryRequest, SparqlRequest
 from core.sparql_validator import SparqlQueryValidator
 
-router = APIRouter(tags=["SPARQL"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(
+    tags=["SPARQL"],
+    dependencies=[Depends(verify_api_key), Depends(require_permission(Permission.QUERY_EXECUTE))],
+)
 
 _llm_limiter: SlidingWindowRateLimiter | None = None
 
@@ -43,9 +48,9 @@ def sparql_query(request: SparqlRequest):
         metrics.incr("sparql_api_rejected")
         raise from_validation_result(check)
     try:
-        results = validator.execute_with_timeout(
-            ontology.execute_sparql, check.query
-        )
+        # execute_sparql enforces SPARQL_QUERY_TIMEOUT_SECONDS by terminating a worker process
+        # (core/sparql_exec.py); SparqlTimeout is a TimeoutError and is mapped to 504 below.
+        results = ontology.execute_sparql(check.query)
         metrics.incr("sparql_api_ok")
         return {"sparql": check.query, "results": results}
     except Exception as e:
@@ -75,6 +80,7 @@ def llm_query_async(request: LLMQueryRequest, http_request: Request):
         "llm-query",
         lambda: gen.generate_and_validate(request.question),
         meta={"question": request.question},
+        tenant_id=request_identity(http_request).tenant_id,
     )
     return {"job_id": job_id, "status_url": f"/jobs/{job_id}"}
 

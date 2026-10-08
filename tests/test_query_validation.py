@@ -65,7 +65,8 @@ def test_sparql_hallucinated_property_rejected():
     """
     result = _sparql_v().run_all_checks(q)
     assert result.valid is False
-    assert result.stage in ("schema", "syntax")
+    assert result.stage == "schema"
+    assert "hasMagicPower" in result.error
 
 
 def test_cypher_valid_match_passes():
@@ -95,12 +96,9 @@ def test_execute_cypher_endpoint_blocks_delete(client):
         json={"cypher": "MATCH (n) DETACH DELETE n"},
     )
     assert r.status_code == 400
-    body = r.json()
-    detail = body.get("detail")
-    if isinstance(detail, dict):
-        assert detail.get("stage") == "safety"
-    else:
-        assert "DELETE" in str(detail).upper() or "Forbidden" in str(detail)
+    detail = r.json()["detail"]
+    assert detail["stage"] == "safety"
+    assert {"DETACH", "DELETE"} & set(detail["details"]["forbidden"])
 
 
 def test_sparql_endpoint_blocks_delete(client):
@@ -114,9 +112,14 @@ def test_sparql_endpoint_blocks_delete(client):
         },
     )
     assert r.status_code == 400
+    assert r.json()["detail"]["stage"] == "safety"
 
 
-def test_metrics_endpoint(client):
-    r = client.get("/metrics")
-    assert r.status_code == 200
-    assert "counters" in r.json()
+def test_metrics_count_rejections(client):
+    def rejected():
+        return client.get("/metrics").json()["counters"].get("sparql_api_rejected", 0)
+
+    before = rejected()
+    client.post("/sparql", json={"query": "DROP ALL"})
+    client.post("/sparql", json={"query": "DROP ALL"})
+    assert rejected() == before + 2

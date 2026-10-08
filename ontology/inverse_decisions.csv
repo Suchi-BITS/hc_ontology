@@ -1,0 +1,87 @@
+property,decision,inverse,rationale
+administeredBy,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:administeredBy); add it when a competency question needs the reverse as a named term."
+administrativeGender,D,,"Inappropriate: the value is controlled-vocabulary or reference data. An inverse would give every concept an edge to every record that uses it (a fan-out), and the reverse is a SPARQL ^hc:administrativeGender away."
+allergyForPatient,A,hasAllergy,Inverse strongly useful: navigation from either end is a real question (allergyForPatient <-> hasAllergy). Declared; the reasoner and the projection infer the other direction.
+allergyToMedication,C,,Unnecessary: the question 'who is allergic to X' is answered through the allergy node (^hc:allergyToMedication / ^hc:hasAllergy) and the safety rule already runs in that direction.
+appointmentAtHospital,C,,"Unnecessary: one hospital in scope, and nothing navigates from the hospital back to its appointments."
+appointmentForPatient,A,hasAppointment,Inverse strongly useful: navigation from either end is a real question (appointmentForPatient <-> hasAppointment). Declared; the reasoner and the projection infer the other direction.
+appointmentWithDoctor,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:appointmentWithDoctor); add it when a competency question needs the reverse as a named term."
+authoredBy,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:authoredBy); add it when a competency question needs the reverse as a named term."
+belongsToHospital,A,hasDepartment,Inverse strongly useful: navigation from either end is a real question (belongsToHospital <-> hasDepartment). Declared; the reasoner and the projection infer the other direction.
+claimAgainstPolicy,C,,"Unnecessary: administrative chain (billing, claim, policy) is read forward only."
+conditionSubject,A,hasCondition,Inverse strongly useful: navigation from either end is a real question (conditionSubject <-> hasCondition). Declared; the reasoner and the projection infer the other direction.
+containedInPrescription,A,containsMedication,Inverse strongly useful: navigation from either end is a real question (containedInPrescription <-> containsMedication). Declared; the reasoner and the projection infer the other direction.
+containsBed,A,locatedInRoom,Inverse strongly useful: navigation from either end is a real question (containsBed <-> locatedInRoom). Declared; the reasoner and the projection infer the other direction.
+containsMedication,A,containedInPrescription,Inverse strongly useful: navigation from either end is a real question (containsMedication <-> containedInPrescription). Declared; the reasoner and the projection infer the other direction.
+containsRoom,A,locatedInWard,Inverse strongly useful: navigation from either end is a real question (containsRoom <-> locatedInWard). Declared; the reasoner and the projection infer the other direction.
+containsWard,A,wardOfDepartment,Inverse strongly useful: navigation from either end is a real question (containsWard <-> wardOfDepartment). Declared; the reasoner and the projection infer the other direction.
+coveredByInsurance,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:coveredByInsurance); add it when a competency question needs the reverse as a named term."
+createdByDoctor,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:createdByDoctor); add it when a competency question needs the reverse as a named term."
+diagnosedBy,A,madeDiagnosis,Inverse strongly useful: navigation from either end is a real question (diagnosedBy <-> madeDiagnosis). Declared; the reasoner and the projection infer the other direction.
+diagnosedIn,A,diagnoses,Inverse strongly useful: navigation from either end is a real question (diagnosedIn <-> diagnoses). Declared; the reasoner and the projection infer the other direction.
+diagnoses,A,diagnosedIn,Inverse strongly useful: navigation from either end is a real question (diagnoses <-> diagnosedIn). Declared; the reasoner and the projection infer the other direction.
+diagnosisForPatient,A,hasDiagnosis,Inverse strongly useful: navigation from either end is a real question (diagnosisForPatient <-> hasDiagnosis). Declared; the reasoner and the projection infer the other direction.
+encounterForPatient,A,hasEncounter,Inverse strongly useful: navigation from either end is a real question (encounterForPatient <-> hasEncounter). Declared; the reasoner and the projection infer the other direction.
+encounterLocation,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:encounterLocation); add it when a competency question needs the reverse as a named term."
+encounterType,D,,"Inappropriate: the value is controlled-vocabulary or reference data. An inverse would give every concept an edge to every record that uses it (a fan-out), and the reverse is a SPARQL ^hc:encounterType away."
+followsCarePlan,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:followsCarePlan); add it when a competency question needs the reverse as a named term."
+fulfilledBy,A,fulfillsAppointment,Inverse strongly useful: navigation from either end is a real question (fulfilledBy <-> fulfillsAppointment). Declared; the reasoner and the projection infer the other direction.
+fulfillsAppointment,A,fulfilledBy,Inverse strongly useful: navigation from either end is a real question (fulfillsAppointment <-> fulfilledBy). Declared; the reasoner and the projection infer the other direction.
+generatesInvoice,C,,Unnecessary: administrative chain is read forward only.
+hasAllergy,A,allergyForPatient,Inverse strongly useful: navigation from either end is a real question (hasAllergy <-> allergyForPatient). Declared; the reasoner and the projection infer the other direction.
+hasAppointment,A,appointmentForPatient,Inverse strongly useful: navigation from either end is a real question (hasAppointment <-> appointmentForPatient). Declared; the reasoner and the projection infer the other direction.
+hasBilling,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:hasBilling); add it when a competency question needs the reverse as a named term."
+hasClinicalNote,C,,Unnecessary: a note is always reached through its record.
+hasCode,D,,"Inappropriate: the value is an external-terminology concept. An inverse would connect every code to every diagnosis, observation and medication that uses it; reach the reverse with ^hc:hasCode."
+hasCondition,A,conditionSubject,Inverse strongly useful: navigation from either end is a real question (hasCondition <-> conditionSubject). Declared; the reasoner and the projection infer the other direction.
+hasDepartment,A,belongsToHospital,Inverse strongly useful: navigation from either end is a real question (hasDepartment <-> belongsToHospital). Declared; the reasoner and the projection infer the other direction.
+hasDiagnosis,A,diagnosisForPatient,Inverse strongly useful: navigation from either end is a real question (hasDiagnosis <-> diagnosisForPatient). Declared; the reasoner and the projection infer the other direction.
+hasEncounter,A,encounterForPatient,Inverse strongly useful: navigation from either end is a real question (hasEncounter <-> encounterForPatient). Declared; the reasoner and the projection infer the other direction.
+hasIdentifier,C,,"Unnecessary: identifiers are looked up by system and value, not by walking back to a person."
+hasMedicalRecord,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:hasMedicalRecord); add it when a competency question needs the reverse as a named term."
+hasObservation,A,observationForPatient,Inverse strongly useful: navigation from either end is a real question (hasObservation <-> observationForPatient). Declared; the reasoner and the projection infer the other direction.
+hasParticipant,A,participatesIn,Inverse strongly useful: navigation from either end is a real question (hasParticipant <-> participatesIn). Declared; the reasoner and the projection infer the other direction.
+hasPrescription,A,prescribedFor,Inverse strongly useful: navigation from either end is a real question (hasPrescription <-> prescribedFor). Declared; the reasoner and the projection infer the other direction.
+hasSpecialty,D,,"Inappropriate: the value is controlled-vocabulary or reference data. An inverse would give every concept an edge to every record that uses it (a fan-out), and the reverse is a SPARQL ^hc:hasSpecialty away."
+hasStaffMember,A,worksInDepartment,Inverse strongly useful: navigation from either end is a real question (hasStaffMember <-> worksInDepartment). Declared; the reasoner and the projection infer the other direction.
+hasVaccination,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:hasVaccination); add it when a competency question needs the reverse as a named term."
+identifierAssigner,C,,Unnecessary: nothing asks which identifiers an organization issued.
+includesObservation,A,observedDuring,Inverse strongly useful: navigation from either end is a real question (includesObservation <-> observedDuring). Declared; the reasoner and the projection infer the other direction.
+includesProcedure,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:includesProcedure); add it when a competency question needs the reverse as a named term."
+involvesProcedure,A,performedDuring,Inverse strongly useful: navigation from either end is a real question (involvesProcedure <-> performedDuring). Declared; the reasoner and the projection infer the other direction.
+involvesSurgery,C,,Unnecessary: a sub-property of includesProcedure; its reverse adds nothing the parent's would not.
+issuedPrescription,A,prescribedBy,Inverse strongly useful: navigation from either end is a real question (issuedPrescription <-> prescribedBy). Declared; the reasoner and the projection infer the other direction.
+locatedInRoom,A,containsBed,Inverse strongly useful: navigation from either end is a real question (locatedInRoom <-> containsBed). Declared; the reasoner and the projection infer the other direction.
+locatedInWard,A,containsRoom,Inverse strongly useful: navigation from either end is a real question (locatedInWard <-> containsRoom). Declared; the reasoner and the projection infer the other direction.
+madeDiagnosis,A,diagnosedBy,Inverse strongly useful: navigation from either end is a real question (madeDiagnosis <-> diagnosedBy). Declared; the reasoner and the projection infer the other direction.
+managedBy,A,managesDepartment,Inverse strongly useful: navigation from either end is a real question (managedBy <-> managesDepartment). Declared; the reasoner and the projection infer the other direction.
+managesDepartment,A,managedBy,Inverse strongly useful: navigation from either end is a real question (managesDepartment <-> managedBy). Declared; the reasoner and the projection infer the other direction.
+medicationCategory,D,,"Inappropriate: the value is controlled-vocabulary or reference data. An inverse would give every concept an edge to every record that uses it (a fan-out), and the reverse is a SPARQL ^hc:medicationCategory away."
+observationForPatient,A,hasObservation,Inverse strongly useful: navigation from either end is a real question (observationForPatient <-> hasObservation). Declared; the reasoner and the projection infer the other direction.
+observedDuring,A,includesObservation,Inverse strongly useful: navigation from either end is a real question (observedDuring <-> includesObservation). Declared; the reasoner and the projection infer the other direction.
+orderedBy,A,orderedTest,Inverse strongly useful: navigation from either end is a real question (orderedBy <-> orderedTest). Declared; the reasoner and the projection infer the other direction.
+orderedTest,A,orderedBy,Inverse strongly useful: navigation from either end is a real question (orderedTest <-> orderedBy). Declared; the reasoner and the projection infer the other direction.
+partOfLocation,C,,"Unnecessary: the specific containment pairs (containsRoom/locatedInWard, containsBed/locatedInRoom) carry the navigation; a general transitive inverse would only duplicate them."
+participatesIn,A,hasParticipant,Inverse strongly useful: navigation from either end is a real question (participatesIn <-> hasParticipant). Declared; the reasoner and the projection infer the other direction.
+performedByDoctor,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:performedByDoctor); add it when a competency question needs the reverse as a named term."
+performedDuring,A,involvesProcedure,Inverse strongly useful: navigation from either end is a real question (performedDuring <-> involvesProcedure). Declared; the reasoner and the projection infer the other direction.
+prescribedBy,A,issuedPrescription,Inverse strongly useful: navigation from either end is a real question (prescribedBy <-> issuedPrescription). Declared; the reasoner and the projection infer the other direction.
+prescribedFor,A,hasPrescription,Inverse strongly useful: navigation from either end is a real question (prescribedFor <-> hasPrescription). Declared; the reasoner and the projection infer the other direction.
+producesResult,A,resultOfTest,Inverse strongly useful: navigation from either end is a real question (producesResult <-> resultOfTest). Declared; the reasoner and the projection infer the other direction.
+receivesTreatment,A,treatmentForPatient,Inverse strongly useful: navigation from either end is a real question (receivesTreatment <-> treatmentForPatient). Declared; the reasoner and the projection infer the other direction.
+recordedBy,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:recordedBy); add it when a competency question needs the reverse as a named term."
+reportsTo,A,supervises,Inverse strongly useful: navigation from either end is a real question (reportsTo <-> supervises). Declared; the reasoner and the projection infer the other direction.
+requiresTreatment,A,treatsDiagnosis,Inverse strongly useful: navigation from either end is a real question (requiresTreatment <-> treatsDiagnosis). Declared; the reasoner and the projection infer the other direction.
+resultOfTest,A,producesResult,Inverse strongly useful: navigation from either end is a real question (resultOfTest <-> producesResult). Declared; the reasoner and the projection infer the other direction.
+reviewedByDoctor,B,,"Possible, not added: the reverse is reachable with a SPARQL inverse path (^hc:reviewedByDoctor); add it when a competency question needs the reverse as a named term."
+serviceProvider,C,,"Unnecessary: one hospital in scope, and nothing navigates from the hospital back to its encounters."
+submitsClaim,C,,Unnecessary: administrative chain is read forward only.
+supervises,A,reportsTo,Inverse strongly useful: navigation from either end is a real question (supervises <-> reportsTo). Declared; the reasoner and the projection infer the other direction.
+testForPatient,A,underwentTest,Inverse strongly useful: navigation from either end is a real question (testForPatient <-> underwentTest). Declared; the reasoner and the projection infer the other direction.
+transportedBy,C,,Unnecessary: a single ambulance in the sample; no navigation from the vehicle.
+treatmentForPatient,A,receivesTreatment,Inverse strongly useful: navigation from either end is a real question (treatmentForPatient <-> receivesTreatment). Declared; the reasoner and the projection infer the other direction.
+treatsDiagnosis,A,requiresTreatment,Inverse strongly useful: navigation from either end is a real question (treatsDiagnosis <-> requiresTreatment). Declared; the reasoner and the projection infer the other direction.
+underwentTest,A,testForPatient,Inverse strongly useful: navigation from either end is a real question (underwentTest <-> testForPatient). Declared; the reasoner and the projection infer the other direction.
+usesMedicalDevice,C,,Unnecessary: device use is read from the treatment.
+wardOfDepartment,A,containsWard,Inverse strongly useful: navigation from either end is a real question (wardOfDepartment <-> containsWard). Declared; the reasoner and the projection infer the other direction.
+worksInDepartment,A,hasStaffMember,Inverse strongly useful: navigation from either end is a real question (worksInDepartment <-> hasStaffMember). Declared; the reasoner and the projection infer the other direction.

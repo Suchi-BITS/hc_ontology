@@ -65,6 +65,16 @@ class CypherQueryValidator(QueryValidator):
                 stage="syntax",
                 error="Cypher read queries must include MATCH and RETURN",
             )
+        return_body = re.split(r"\bRETURN\b", query, maxsplit=1, flags=re.IGNORECASE)
+        if len(return_body) > 1:
+            tail = re.split(r"\bLIMIT\b", return_body[1], maxsplit=1, flags=re.IGNORECASE)[0]
+            if not tail.strip() or not re.search(r"[A-Za-z_]", tail):
+                return QueryValidationResult(
+                    valid=False,
+                    query=query,
+                    stage="syntax",
+                    error="RETURN clause must include at least one expression",
+                )
         if self.explain_fn is not None:
             try:
                 self.explain_fn(f"EXPLAIN {query}")
@@ -99,6 +109,20 @@ class CypherQueryValidator(QueryValidator):
                 error=f"Forbidden Cypher write/admin keywords: {', '.join(hits)}",
                 details={"forbidden": hits},
             )
+        # The allowlist policy is the structural check (procedures, subqueries that call out, comments,
+        # unbounded traversals ...). The keyword list above only gives a friendlier message for the
+        # common cases; the real write barrier is the read-only transaction at execution time.
+        from core.cypher_policy import check_read_only
+
+        policy = check_read_only(query)
+        if not policy.allowed:
+            return QueryValidationResult(
+                valid=False,
+                query=query,
+                stage="safety",
+                error=f"Query refused by the read-only policy: {policy.reason}",
+                details={"policy_violations": policy.violations, "forbidden": []},
+            )
         return QueryValidationResult(valid=True, query=query)
 
     def check_schema(self, query: str) -> QueryValidationResult:
@@ -128,7 +152,7 @@ class CypherQueryValidator(QueryValidator):
 
         # Property keys after `.` — only flag if clearly not `name` and not in schema
         props = set(re.findall(r"\.([A-Za-z_][A-Za-z0-9_]*)", query))
-        allow_props = self.data_properties | {"name", "id", "elementId"}
+        allow_props = self.data_properties | {"name", "iri", "id", "elementId", "rdfTypes"}
         unknown_props = sorted(
             p
             for p in props
@@ -167,3 +191,8 @@ class CypherQueryValidator(QueryValidator):
             query=rewritten,
             details={"limit_injected": self.default_limit},
         )
+
+    def run_all_checks(self, query: str) -> QueryValidationResult:
+        from core.cypher_repair import repair_cypher
+
+        return super().run_all_checks(repair_cypher(query))

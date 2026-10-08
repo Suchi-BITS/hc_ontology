@@ -3,19 +3,25 @@
 @prefix hc:     <http://example.org/healthcare-hospital.owl#> .
 @prefix shapes: <http://example.org/healthcare-shapes#> .
 
+# Identity-bearing data a patient record must carry. The role shape owns the
+# minCount rules; shared datatype rules come from PersonShape via sh:node.
+
 shapes:PatientShape
     a sh:NodeShape ;
     sh:targetClass hc:Patient ;
     sh:node shapes:PersonShape ;
     sh:property [
         sh:path hc:firstName ;
-        sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:message "Patient must have a firstName." ;
     ] ;
     sh:property [
+        sh:path hc:lastName ;
+        sh:minCount 1 ;
+        sh:message "Patient must have a lastName." ;
+    ] ;
+    sh:property [
         sh:path hc:dateOfBirth ;
-        sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:message "Patient must have a dateOfBirth." ;
     ] ;
@@ -32,6 +38,23 @@ shapes:PatientShape
         sh:minCount 1 ;
         sh:severity sh:Warning ;
         sh:message "Patient should have at least one diagnosis." ;
+    ] ;
+    # Relationship-type guards: a patient's links must point at the right kind of thing.
+    # (Subclass membership such as VitalSign -> Observation needs the schema in the data graph.)
+    sh:property [
+        sh:path hc:hasEncounter ;
+        sh:class hc:Encounter ;
+        sh:message "hasEncounter must point to an hc:Encounter." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasObservation ;
+        sh:class hc:Observation ;
+        sh:message "hasObservation must point to an hc:Observation." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasAllergy ;
+        sh:class hc:Allergy ;
+        sh:message "hasAllergy must point to an hc:Allergy." ;
     ] ;
     sh:property [
         sh:path hc:hasMedicalRecord ;

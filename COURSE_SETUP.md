@@ -1,5 +1,7 @@
 # Course setup guide (students)
 
+> **Fastest path:** `python scripts/dev.py quickstart` does the project setup below for you (virtualenv, dependencies, `.env`) and then validates, tests and runs the demo, with no Neo4j or API key. The Neo4j and OpenAI steps are optional additions (`python scripts/dev.py up`, then `load`) and OpenAI. See [docs/reproducibility.md](docs/reproducibility.md).
+
 Follow these steps in order before starting the Udemy labs.
 
 ---
@@ -8,15 +10,15 @@ Follow these steps in order before starting the Udemy labs.
 
 - Python 3.11+
 - [Neo4j Desktop](https://neo4j.com/download/)
-- [Ollama](https://ollama.com/)
+- An [OpenAI API key](https://platform.openai.com/api-keys) (kept in `.env`, never committed)
 - Git
 
 ---
 
-## Step 1 — Project setup
+## Step 1 — Project setup (manual route)
 
 ```powershell
-cd healthcare_ontology
+cd hc_ontology
 .\scripts\setup.ps1
 ```
 
@@ -26,26 +28,28 @@ Or on macOS/Linux:
 bash scripts/setup.sh
 ```
 
-Copy and edit environment:
+Copy and edit environment (the setup scripts do this for you if `.env` is missing):
 
 ```bash
 cp .env.example .env
 ```
+
+Set at least `OPENAI_API_KEY` and `NEO4J_PASSWORD`. Never commit `.env`; see [docs/security-and-configuration.md](docs/security-and-configuration.md).
 
 ---
 
 ## Step 2 — Neo4j
 
 1. Open **Neo4j Desktop** → create/start an instance (name can be `hc`)
-2. Open **Databases** tab → note the database name (e.g. `hcontology` or `neo4j`)
+2. Open **Databases** tab → note the database name. Neo4j Community Edition has exactly one user database, named `neo4j`; use that name (or run Neo4j with `python scripts/dev.py up` instead of Desktop)
 3. Set password on first login
 4. Update `.env`:
 
 ```env
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=your_password
-NEO4J_DATABASE=hcontology
+NEO4J_PASSWORD=<your-neo4j-password>
+NEO4J_DATABASE=neo4j
 ```
 
 > **Important:** `NEO4J_DATABASE` is the **database name inside Neo4j**, not the Desktop instance name.
@@ -58,15 +62,9 @@ GET http://127.0.0.1:8000/neo4j/health
 
 ---
 
-## Step 3 — Ollama
+## Step 3 — OpenAI
 
-```bash
-ollama pull qwen2.5:latest
-ollama pull nomic-embed-text:latest
-ollama serve
-```
-
-Verify:
+Ensure `OPENAI_API_KEY` is set in `.env` (Ollama is not used). Verify:
 
 ```http
 GET http://127.0.0.1:8000/embedding/health
@@ -144,7 +142,7 @@ Kill leftover Python processes on port 8000, then start uvicorn again.
 
 ### LLM endpoints hang
 
-Normal — first Ollama call can take 1–3 minutes. Wait or use smaller questions for demos.
+Normal — an LLM call can take 1–3 minutes. Wait or use smaller questions for demos.
 
 ---
 

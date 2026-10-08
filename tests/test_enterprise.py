@@ -21,8 +21,8 @@ def test_guardrails_allow_normal_question():
 def test_guardrails_redact_pii():
     r = check_input("Call me at 415-555-1212 about diabetes")
     assert r.allowed is True
-    assert r.redacted_text is not None
-    assert "415-555-1212" not in r.redacted_text
+    assert r.redacted_text == "Call me at [REDACTED] about diabetes"
+    assert "pii" in r.flags
 
 
 def test_guardrails_block_dangerous_output():
@@ -31,17 +31,18 @@ def test_guardrails_block_dangerous_output():
 
 
 def test_tenants_seeded():
-    assert tenant_registry.get("default") is not None
-    assert "hc-core" in tenant_registry.get("default").ontology_ids
+    assert tenant_registry.get("default").ontology_ids == ["hc-core"]
+    assert tenant_registry.get("research").ontology_ids == ["hc-core", "hc-research"]
 
 
 def test_ontology_registry_versions():
     rec = ontology_registry.get("hc-core")
-    assert rec is not None
     assert rec.active_version == "1.0.0"
     path, ver = ontology_registry.resolve_owl_path("hc-core")
     assert ver.version == "1.0.0"
-    assert path
+    from pathlib import Path
+
+    assert Path(path).name == "healthcare_schema.ttl" and Path(path).is_file()
 
 
 def test_rbac_admin_has_all():
@@ -69,5 +70,7 @@ def test_eval_offline_runner():
         return {"status": "completed", "query_type": plan["query_type"], "answer": "ok"}
 
     report = run_evaluation(runner)
-    assert report["cases"] >= 3
-    assert "avg_score" in report
+    assert report["cases"] == 5
+    # The stub runner classifies and blocks correctly but never refuses for low evidence:
+    assert report["passed"] == 4 and report["split"] == "all"
+    assert 0.0 < report["avg_score"] < 1.0

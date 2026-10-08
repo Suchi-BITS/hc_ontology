@@ -1,23 +1,25 @@
+"""Composition root: which service implements what.
+
+The CORE getters (ontology, SHACL validator) import only core modules. The getters that need the LLM
+stack or the Neo4j driver import their service inside the function, so importing this module (and
+therefore the core routers) works without openai, langchain or a Neo4j server. See
+docs/core-vs-ai-architecture.md.
+"""
+
 import os
 from functools import lru_cache
 
-from services.cypher_generator import CypherGenerator
-from services.embedding_service import EmbeddingService
 from services.load_ontology import HealthcareOntology
-from services.sparql_generator import SparqlGenerator
-from services.neo4j_exporter import Neo4jExporter
-from services.sparql_to_cypher import SparqlToCypher
 
 from core.config import get_settings
 from core.shacl_validator import ShaclValidator
 
 
-def _resolve_owl_path() -> str:
-    settings = get_settings()
-    owl_file = settings["owl_file"]
-    if not os.path.isfile(owl_file) and os.path.isfile("healthcare_ontology.owl"):
-        return "healthcare_ontology.owl"
-    return owl_file
+def _resolve_owl_path():
+    """The configured dataset: schema + sample data (see core/dataset.py)."""
+    from core.dataset import Dataset
+
+    return Dataset.default()
 
 
 @lru_cache
@@ -26,30 +28,46 @@ def get_ontology() -> HealthcareOntology:
 
 
 @lru_cache
-def get_sparql_generator() -> SparqlGenerator:
+def get_sparql_generator():  # ADVANCED: natural language -> SPARQL (needs the LLM stack)
+    from services.sparql_generator import SparqlGenerator
+
     settings = get_settings()
-    return SparqlGenerator(get_ontology(), model_name=settings["ollama_model"])
+    return SparqlGenerator(get_ontology(), model_name=settings["llm_model"])
 
 
 @lru_cache
-def get_sparql_to_cypher() -> SparqlToCypher:
+def get_sparql_to_cypher():  # needs the neo4j driver, not an LLM
+    from services.sparql_to_cypher import SparqlToCypher
+
     return SparqlToCypher()
 
 
 @lru_cache
-def get_cypher_generator() -> CypherGenerator:
+def get_cypher_generator():  # ADVANCED: natural language -> Cypher (needs the LLM stack)
+    from services.cypher_generator import CypherGenerator
+
     settings = get_settings()
-    return CypherGenerator(get_ontology(), model_name=settings["ollama_model"])
+    return CypherGenerator(get_ontology(), model_name=settings["llm_model"])
 
 
 @lru_cache
-def get_neo4j_exporter() -> Neo4jExporter:
-    return Neo4jExporter(get_ontology())
+def get_neo4j_exporter():  # needs the neo4j driver
+    from services.neo4j_exporter import Neo4jExporter
+
+    # The projection reads the authoritative RDF file directly (not the Owlready2 object model)
+    # and is gated by the SHACL shapes.
+    return Neo4jExporter(owl_file=_resolve_owl_path(), validator=get_shacl_validator())
 
 
 @lru_cache
-def get_embedding_service() -> EmbeddingService:
-    return EmbeddingService(ontology_path=_resolve_owl_path())
+def get_embedding_service():  # ADVANCED: embeddings (needs openai and Neo4j)
+    from services.embedding_service import EmbeddingService
+
+    settings = get_settings()
+    return EmbeddingService(
+        ontology_path=_resolve_owl_path(),
+        embedding_model=settings["embedding_model"],
+    )
 
 
 @lru_cache

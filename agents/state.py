@@ -16,6 +16,7 @@ RunStatus = Literal[
     "responding",
     "completed",
     "failed",
+    
     "rejected",
 ]
 
@@ -41,11 +42,28 @@ class AgentState(TypedDict, total=False):
     require_human_approval: bool
     max_retries: int
 
-    # Ontology retrieval
+    # Memory (working / episodic / procedural / semantic)
+    memory_bundle: dict[str, Any]
+    memory_context: str
+    working_context: str
+    working_events: list[dict[str, Any]]
+    matched_procedures: list[dict[str, Any]]
+    meta_memory: dict[str, Any]
+
+    # Ontology retrieval (semantic memory projection)
     ontology_context: str
     retrieved_concepts: list[dict[str, Any]]
-    memory_context: str
     hybrid_meta: dict[str, Any]
+    retrieval_meta: dict[str, Any]
+
+    # Governance (provenance + abstention)
+    provenance: dict[str, Any]
+    refused: bool
+    refusal_reason: Optional[str]
+    confidence: float
+    abstention_threshold: float
+    confidence_signals: dict[str, float]
+    structured_answer: dict[str, Any]
 
     # Query generation
     draft_query: str

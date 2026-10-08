@@ -17,6 +17,7 @@ shapes:Manifest a owl:Ontology ;
                   shapes:module-doctor ,
                   shapes:module-diagnosis ,
                   shapes:module-treatment ,
+                  shapes:module-clinical ,
                   shapes:module-medication .
 
 shapes:module-common-prefixes
@@ -50,3 +51,7 @@ shapes:module-treatment
 shapes:module-medication
     rdfs:label "medication_shapes.ttl" ;
     rdfs:seeAlso <medication_shapes.ttl> .
+
+shapes:module-clinical
+    rdfs:label "clinical_shapes.ttl" ;
+    rdfs:seeAlso <clinical_shapes.ttl> .

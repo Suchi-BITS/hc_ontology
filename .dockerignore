@@ -1,0 +1,44 @@
+# Secrets and local configuration - must never enter the build context
+.env
+.env.*
+!.env.example
+.credentials.json
+*.credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.streamlit/secrets.toml
+
+# VCS
+.git
+.gitignore
+.github
+
+# Python environments and caches
+venv
+.venv
+env
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+*.egg-info
+
+# Build / generated artifacts
+node_modules
+dist
+build
+coverage
+*.log
+validation_reports/*
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store

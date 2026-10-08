@@ -9,7 +9,9 @@ import re
 from typing import Dict, List
 
 from dotenv import load_dotenv
-from neo4j import GraphDatabase
+from neo4j import READ_ACCESS, GraphDatabase, unit_of_work
+from neo4j.exceptions import ClientError
+from core.config import require_neo4j_password
 
 load_dotenv()
 
@@ -684,115 +686,72 @@ MATCH ({subject})
     # =================================================
 
     def connect(self):
+        # Fail fast: an unreachable database must not hold a request for the driver's default 30 s of retries.
+        from core.config import get_settings
 
-        driver = GraphDatabase.driver(
-
-            os.getenv(
-
-                "NEO4J_URI",
-
-                "bolt://localhost:7687"
-            ),
-
-            auth=(
-
-                os.getenv(
-
-                    "NEO4J_USERNAME",
-
-                    "neo4j"
-                ),
-
-                os.getenv(
-
-                    "NEO4J_PASSWORD"
-                )
-            )
+        settings = get_settings()
+        return GraphDatabase.driver(
+            settings["neo4j_uri"],
+            auth=(settings["neo4j_username"], require_neo4j_password()),
+            connection_timeout=5,
+            connection_acquisition_timeout=5,
+            max_transaction_retry_time=2,
         )
-
-        return driver
 
     def _database_name(self) -> str:
 
-        return os.getenv(
+        from core.config import get_settings
 
-            "NEO4J_DATABASE",
-
-            "neo4j"
-        )
+        return get_settings()["neo4j_database"]
 
     # =================================================
     # EXECUTE CYPHER
     # =================================================
 
-    def execute_cypher(
+    def execute_cypher(self, cypher: str) -> List[Dict]:
+        """Run a query that came from a user or from the LLM, READ-ONLY.
 
-        self,
+        The control that matters is the database's own: the query runs in a read transaction on a
+        READ-access session, so the server refuses any write whatever the text says. The allowlist
+        policy is a second layer that refuses procedures, admin commands and unbounded traversals
+        before anything is sent. A transaction timeout bounds the cost.
+        """
+        from core.config import get_settings
+        from core.cypher_policy import require_read_only
 
-        cypher: str
-
-    ) -> List[Dict]:
+        require_read_only(cypher)
 
         driver = self.connect()
-
         database = self._database_name()
+        timeout = float(get_settings().get("query_timeout_seconds", 30))
+
+        # The timeout belongs to the TRANSACTION (unit_of_work). A Query(timeout=...) object is only accepted by
+        # session.run, not by tx.run inside execute_read, and fails against a real server (found by the live
+        # Neo4j Desktop verification; a recording fake driver accepts it).
+        @unit_of_work(timeout=timeout)
+        def read(tx):
+            return [record for record in tx.run(cypher)]
+
+        try:
+            with driver.session(database=database, default_access_mode=READ_ACCESS) as session:
+                records = session.execute_read(read)
+        except ClientError as exc:
+            if "TransactionTimedOut" in (exc.code or ""):  # the DATABASE terminated it: a controlled 504, not a driver message
+                raise TimeoutError(f"Cypher query exceeded the {timeout:g}-second limit and was terminated by the database") from None
+            raise
+        finally:
+            driver.close()
 
         results = []
-
-        with driver.session(
-
-            database=database
-
-        ) as session:
-
-            query_result = session.run(
-
-                cypher
-            )
-
-            for record in query_result:
-
-                row = {}
-
-                for key in record.keys():
-
-                    value = record[key]
-
-                    try:
-
-                        if hasattr(
-
-                            value,
-
-                            "items"
-                        ):
-
-                            row[key] = dict(
-
-                                value.items()
-                            )
-
-                        else:
-
-                            row[key] = str(
-
-                                value
-                            )
-
-                    except Exception:
-
-                        row[key] = str(
-
-                            value
-                        )
-
-                results.append(
-
-                    row
-                )
-
-        driver.close()
-
+        for record in records:
+            row = {}
+            for key in record.keys():
+                value = record[key]
+                try:
+                    row[key] = dict(value.items()) if hasattr(value, "items") else str(value)
+                except Exception:
+                    row[key] = str(value)
+            results.append(row)
         return results
 
     # =================================================

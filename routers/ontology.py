@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.auth import verify_api_key
+from core.authz import Permission, require_permission
 from core.dependencies import get_ontology
 
-router = APIRouter(tags=["Ontology"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(tags=["Ontology"], dependencies=[Depends(verify_api_key), Depends(require_permission(Permission.CLINICAL_READ))])
 
 
 @router.get("/classes")

@@ -10,8 +10,24 @@ def test_shapes_directory_has_common_and_manifest(shacl_loader):
     assert "shapes_manifest.ttl" in files
 
 
+
+EXPECTED_NODE_SHAPES = {
+    "PersonShape", "PatientShape", "PractitionerShape", "DoctorShape", "ConditionShape", "DiagnosisShape",
+    "EncounterShape", "ObservationShape", "CodeConceptShape", "IdentifierShape", "MedicationShape",
+    "PrescriptionAllergyConflictShape", "AllergyShape", "HospitalShape", "TreatmentShape",
+}
+
+
+def node_shape_names(graph):
+    from rdflib import RDF, URIRef
+    from rdflib.namespace import SH
+
+    return {str(s).split("#")[-1] for s in graph.subjects(RDF.type, SH.NodeShape) if isinstance(s, URIRef)}
+
+
 def test_load_all_shapes_merges_package(shapes_graph):
-    assert len(shapes_graph) > 0
+    """Every module of the package is merged: the expected shapes are all present."""
+    assert EXPECTED_NODE_SHAPES <= node_shape_names(shapes_graph), EXPECTED_NODE_SHAPES - node_shape_names(shapes_graph)
 
 
 def test_valid_patient_fixture(validator, sample_instances_dir):

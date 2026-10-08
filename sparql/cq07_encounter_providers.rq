@@ -1,0 +1,9 @@
+# CQ07: Which practitioners took part in which encounter?
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?encounter ?practitioner WHERE {
+  ?practitioner hc:participatesIn ?encounter .
+}
+ORDER BY ?encounter ?practitioner

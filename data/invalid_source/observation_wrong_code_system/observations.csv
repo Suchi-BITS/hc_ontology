@@ -1,0 +1,2 @@
+id,class,patient_id,encounter_id,code_id,value,unit,effective,recorded_by
+Observation001,VitalSign,PatientJohn,Encounter001,Icd10_I10,152.0,mm[Hg],2026-03-01T09:40:00+00:00,NurseMary

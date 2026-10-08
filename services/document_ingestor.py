@@ -13,7 +13,7 @@ from typing import Iterable
 
 from neo4j import GraphDatabase
 
-from core.config import get_settings
+from core.config import get_settings, require_neo4j_password
 from core.dependencies import get_embedding_service
 
 
@@ -183,7 +183,7 @@ def _neo4j_driver():
     settings = get_settings()
     return GraphDatabase.driver(
         settings["neo4j_uri"],
-        auth=(settings["neo4j_username"], settings["neo4j_password"]),
+        auth=(settings["neo4j_username"], require_neo4j_password()),
     )
 
 

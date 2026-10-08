@@ -36,9 +36,20 @@ class SlidingWindowRateLimiter:
 
 
 def client_key(request: Request) -> str:
+    """The rate-limit key: the real network peer.
+
+    X-Forwarded-For is attacker-controlled unless it was written by a proxy we trust, so it is used
+    only when the direct peer is listed in TRUSTED_PROXIES. Otherwise a caller could pick a new key on
+    every request and never be limited.
+    """
+    peer = request.client.host if request.client else "unknown"
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
+    if forwarded and peer in _trusted_proxies():
         return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
+    return peer
+
+
+def _trusted_proxies() -> set[str]:
+    from core.config import get_settings
+
+    return {p.strip() for p in str(get_settings().get("trusted_proxies", "")).split(",") if p.strip()}

@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 
-# Rough local/Ollama cost model (USD) — configurable for cloud models
+# Rough per-unit cost model (USD) — configurable for cloud models
 DEFAULT_UNIT_COSTS = {
     "llm_call": 0.002,
     "embedding_call": 0.0001,

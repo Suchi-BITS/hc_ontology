@@ -1,0 +1,9 @@
+# CQ12: Which beds belong to which department? (property path over the containment chain)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?department ?bed WHERE {
+  ?department hc:containsWard/hc:containsRoom/hc:containsBed ?bed .
+}
+ORDER BY ?department ?bed

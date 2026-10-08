@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.auth import verify_api_key
+from core.authz import Permission, require_permission
 from core.dependencies import get_embedding_service
 
-router = APIRouter(prefix="/embedding", tags=["Embeddings"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(
+    prefix="/embedding",
+    tags=["Embeddings"],
+    dependencies=[Depends(verify_api_key), Depends(require_permission(Permission.QUERY_EXECUTE))],
+)
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[Depends(require_permission(Permission.GRAPH_WRITE))])
 def embedding_sync(
     force: bool = Query(
         False,

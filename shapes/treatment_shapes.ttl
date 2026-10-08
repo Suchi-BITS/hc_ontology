@@ -23,6 +23,6 @@ shapes:TreatmentShape
         sh:path hc:treatmentStatus ;
         sh:datatype xsd:string ;
         sh:severity sh:Info ;
-        sh:in ( "Planned" "Active" "Completed" "Cancelled" ) ;
+        sh:in ( "Planned"^^xsd:string "Active"^^xsd:string "Completed"^^xsd:string "Cancelled"^^xsd:string ) ;
         sh:message "treatmentStatus should be one of Planned, Active, Completed, Cancelled." ;
     ] .

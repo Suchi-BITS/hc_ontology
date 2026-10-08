@@ -71,4 +71,7 @@ def enqueue_workflow(name: str, **kwargs: Any) -> str:
     if name not in WORKFLOWS:
         raise KeyError(f"Unknown workflow: {name}")
     fn = WORKFLOWS[name]
-    return job_store.submit(f"workflow:{name}", lambda: fn(**kwargs), meta={"workflow": name, **kwargs})
+    return job_store.submit(
+        f"workflow:{name}", lambda: fn(**kwargs), meta={"workflow": name, **kwargs},
+        tenant_id=str(kwargs.get("tenant_id", "")),
+    )

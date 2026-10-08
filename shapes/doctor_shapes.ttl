@@ -3,22 +3,38 @@
 @prefix hc:     <http://example.org/healthcare-hospital.owl#> .
 @prefix shapes: <http://example.org/healthcare-shapes#> .
 
+# Any clinical practitioner (doctor, nurse, ...). Doctors match this shape too
+# (Doctor is a subclass of Practitioner; pySHACL runs with RDFS inference, which
+# needs the subclass triples to be present in the data graph).
+shapes:PractitionerShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Practitioner ;
+    sh:node shapes:PersonShape ;
+    sh:property [
+        sh:path hc:firstName ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Practitioner should have a firstName." ;
+    ] ;
+    sh:property [
+        sh:path hc:lastName ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Practitioner should have a lastName." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasSpecialty ;
+        sh:class hc:Specialty ;
+        sh:message "hasSpecialty values must be hc:Specialty concepts." ;
+    ] .
+
 shapes:DoctorShape
     a sh:NodeShape ;
     sh:targetClass hc:Doctor ;
-    sh:node shapes:PersonShape ;
     sh:property [
-        sh:path hc:specialization ;
-        sh:datatype xsd:string ;
+        sh:path hc:hasSpecialty ;
         sh:minCount 1 ;
-        sh:message "Doctor must have a specialization." ;
-    ] ;
-    sh:property [
-        sh:path hc:doctorLicenseNumber ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:severity sh:Warning ;
-        sh:message "Doctor should have a doctorLicenseNumber." ;
+        sh:message "Doctor must have a specialty (hasSpecialty)." ;
     ] ;
     sh:property [
         sh:path hc:worksInDepartment ;
@@ -26,4 +42,17 @@ shapes:DoctorShape
         sh:minCount 1 ;
         sh:severity sh:Warning ;
         sh:message "Doctor should be assigned to a department." ;
+    ] ;
+    # A license is a business Identifier (system + value + type), not a bare string.
+    sh:property [
+        sh:path hc:hasIdentifier ;
+        sh:qualifiedValueShape [
+            sh:property [
+                sh:path hc:identifierType ;
+                sh:hasValue "license"^^xsd:string ;
+            ]
+        ] ;
+        sh:qualifiedMinCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Doctor should have a license Identifier (identifierType \"license\")." ;
     ] .

@@ -1,0 +1,7 @@
+id,patient_id,type,start,end,reason,participants,location,transport
+Encounter001,PatientJohn,Ambulatory,2026-03-01T09:30:00,2026-03-01T10:00:00+00:00,Elevated blood pressure at routine check,DrSmith|NurseMary,,
+Encounter002,PatientEmma,Ambulatory,2026-03-05T14:00:00+00:00,2026-03-05T14:20:00+00:00,Fever and cough,DrKumar,,
+Encounter003,PatientDavid,Emergency,2026-03-09T22:15:00+00:00,2026-03-10T02:40:00+00:00,Severe headache,DrWilliams|DrJohn,WardICU,Ambulance001
+Encounter004,PatientAlice,Ambulatory,2026-03-12T11:00:00+00:00,2026-03-12T11:30:00+00:00,Follow-up of raised blood glucose,DrKumar,,
+Encounter005,PatientBob,Ambulatory,2026-03-13T08:45:00+00:00,2026-03-13T09:15:00+00:00,Follow-up of raised blood glucose,DrKumar,,
+Encounter006,PatientDavid,Inpatient,2026-03-10T02:40:00+00:00,2026-03-12T09:00:00+00:00,Observation after emergency admission,DrJohn|NurseRita,Bed4,

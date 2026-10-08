@@ -1,0 +1,11 @@
+# CQ16: Which observations were made during a given encounter?
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?encounter ?observation ?measure ?value ?unit WHERE {
+  ?encounter hc:includesObservation ?observation .
+  ?observation hc:hasCode/hc:codeDisplay ?measure .
+  OPTIONAL { ?observation hc:observationValue ?value ; hc:observationUnit ?unit }
+}
+ORDER BY ?encounter ?observation

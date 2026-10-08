@@ -9,8 +9,7 @@ from agents.nodes.planner import _heuristic_plan, _parse_json
 def test_heuristic_plan_defaults_to_cypher():
     plan = _heuristic_plan("List patients with diabetes")
     assert plan["query_type"] == "cypher"
-    assert isinstance(plan["plan"], list)
-    assert len(plan["plan"]) >= 3
+    assert len(plan["plan"]) >= 3 and all(isinstance(step, str) and step for step in plan["plan"])
 
 
 def test_heuristic_plan_sparql_keyword():
@@ -60,17 +59,18 @@ def test_route_after_human():
 
 def test_build_agent_graph_compiles():
     graph = build_agent_graph()
-    assert graph is not None
     # Compiled graph exposes nodes via get_graph
     g = graph.get_graph()
     node_ids = set(g.nodes.keys())
     for name in (
+        "memory_load",
         "planner",
         "ontology",
         "query",
         "validation",
         "human_gate",
         "execution",
+        "abstention",
         "response",
     ):
         assert name in node_ids

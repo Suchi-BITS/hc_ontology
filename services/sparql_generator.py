@@ -1,15 +1,16 @@
 # sparql_generator.py
 # ==============================================
 # PART 1
-# LangChain + Ollama + Dynamic Schema Extraction
+# LangChain + OpenAI + Dynamic Schema Extraction
 # ==============================================
 
 import re
 from typing import Dict, List
 
-from langchain_ollama import ChatOllama
 from langchain_core.prompts import PromptTemplate
 from rdflib import Graph
+
+from core.llm import get_chat_llm
 
 
 class SparqlGenerator:
@@ -19,7 +20,9 @@ class SparqlGenerator:
             ↓
         LangChain
             ↓
-      Ollama (Llama3)
+      LangChain
+            ↓
+      OpenAI
             ↓
          SPARQL
     """
@@ -27,7 +30,7 @@ class SparqlGenerator:
     def __init__(
     self,
     ontology,
-    model_name: str = "qwen2.5:latest"
+    model_name: str = "gpt-4.1-mini"
 ):
 
         self.ontology = ontology
@@ -37,12 +40,8 @@ class SparqlGenerator:
             "healthcare-hospital.owl#"
         )
 
-        self.llm = ChatOllama(
-
-            model=model_name,
-
-            temperature=0
-        )
+        self.model_name = model_name
+        self.llm = get_chat_llm(model=model_name, temperature=0)
 
         self.prompt = PromptTemplate(
 
@@ -55,6 +54,8 @@ class SparqlGenerator:
                 "object_properties",
 
                 "data_properties",
+
+                "inferred_properties",
 
                 "question"
             ],
@@ -90,6 +91,11 @@ Available Data Properties:
 
 {data_properties}
 
+NOT STORED in the data (inferred by a reasoner, so a query using them returns NOTHING).
+Use the property in brackets instead:
+
+{inferred_properties}
+
 Rules:
 
 1. Use ONLY the classes listed above.
@@ -108,6 +114,10 @@ PREFIX hc: <{namespace}>
 
 7. If the question cannot be answered,
 return an empty SELECT query.
+
+8. The data is stored as asserted: an individual has only its most
+specific class (a diagnosis is hc:Diagnosis, not hc:Condition, and a
+patient is hc:Patient, not hc:Person). Query the most specific class.
 
 Question:
 
@@ -204,6 +214,39 @@ SPARQL:
 
         )
 
+    @staticmethod
+    def property_lines(properties) -> str:
+        """One line per property with its direction: `hasDiagnosis (Patient -> Diagnosis)`.
+
+        A bare list of names is not enough: given only `hasDiagnosis` the model writes `?diagnosis hc:hasDiagnosis
+        ?patient`, a valid query that matches nothing.
+        """
+        def names(values):
+            flat = []
+            for v in values or []:
+                flat.extend(getattr(v, "Classes", None) or [v])
+            return " | ".join(sorted(getattr(v, "name", None) or getattr(v, "__name__", str(v)) for v in flat)) or "?"
+
+        lines = []
+        for prop in sorted(properties, key=lambda p: p.name):
+            domain, rng = names(prop.domain), names(prop.range)
+            lines.append(f"{prop.name} ({domain} -> {rng})")
+        return "\n".join(lines)
+
+    def inferred_properties_text(self) -> str:
+        """Object properties that exist only as the inferred inverse of another (the data stores the forward one).
+
+        Found from the ontology itself: an inverse whose comment says it is inferred. Without this the model
+        happily writes a valid query over a property no triple uses, and gets an empty answer.
+        """
+        lines = []
+        for prop in self.ontology.onto.object_properties():
+            inverse = getattr(prop, "inverse_property", None)
+            comment = " ".join(str(c) for c in (getattr(prop, "comment", None) or []))
+            if inverse is not None and "nverse of" in comment:
+                lines.append(f"{prop.name} [use {inverse.name}]")
+        return "\n".join(sorted(lines)) or "(none)"
+
     # ==========================================
     # PROMPT CONSTRUCTION
     # ==========================================
@@ -228,17 +271,11 @@ SPARQL:
 
             ),
 
-            object_properties="\n".join(
+            object_properties=self.property_lines(self.ontology.onto.object_properties()),
 
-                schema["object_properties"]
+            data_properties=self.property_lines(self.ontology.onto.data_properties()),
 
-            ),
-
-            data_properties="\n".join(
-
-                schema["data_properties"]
-
-            ),
+            inferred_properties=self.inferred_properties_text(),
 
             question=question
         )
@@ -349,21 +386,10 @@ SPARQL:
         sparql: str
     ):
 
-        graph = Graph()
-
-        graph.parse(
-            self.ontology.owl_file,
-            format="xml"
-        )
-
         try:
-            validator = self._build_validator()
-
-            def _run(q: str):
-                rows = graph.query(q)
-                return [[str(x) for x in row] for row in rows]
-
-            results = validator.execute_with_timeout(_run, sparql)
+            # The same bounded execution path as the public /sparql endpoint (generated queries are
+            # untrusted too): a worker process that is terminated when the time limit passes.
+            results = self.ontology.execute_sparql(sparql)
 
             return {
                 "valid": True,

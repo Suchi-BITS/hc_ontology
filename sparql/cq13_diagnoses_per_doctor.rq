@@ -1,0 +1,11 @@
+# CQ13: How many diagnoses has each doctor made? (aggregation)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?doctor (COUNT(?dx) AS ?diagnoses) WHERE {
+  ?dx a hc:Diagnosis ;
+      hc:diagnosedBy ?doctor .
+}
+GROUP BY ?doctor
+ORDER BY DESC(?diagnoses) ?doctor

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 import uuid
 from typing import Any, Literal, Optional
@@ -12,7 +13,7 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from agents.graph import get_agent_graph, serialize_state
-from agents.memory import get_agent_memory
+from agents.memory import get_episodic_memory, get_memory_orchestrator, get_procedural_memory
 from core.config import get_settings
 from core.job_store import job_store
 from core.rate_limit import SlidingWindowRateLimiter
@@ -53,6 +54,11 @@ class AgentResumeRequest(BaseModel):
     thread_id: str = Field(..., min_length=1)
     decision: Literal["approved", "rejected"] = "approved"
     feedback: Optional[str] = None
+
+
+class MemoryPreviewRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    session_id: Optional[str] = None
 
 
 def _interrupt_payload(result: Any) -> Optional[dict[str, Any]]:
@@ -143,6 +149,12 @@ def _finalize_payload(values: dict[str, Any], *, interrupted: bool = False, inte
         "tenant_id": values.get("tenant_id"),
         "answer": answer,
         "citations": values.get("citations") or [],
+        "refused": bool(values.get("refused")),
+        "refusal_reason": values.get("refusal_reason"),
+        "confidence": values.get("confidence"),
+        "provenance": values.get("provenance") or {},
+        "structured_answer": values.get("structured_answer") or {},
+        "retrieval_meta": values.get("retrieval_meta") or {},
         "query_type": values.get("query_type"),
         "plan": values.get("plan"),
         "validated_query": values.get("validated_query") or values.get("draft_query"),
@@ -200,12 +212,14 @@ def agent_health():
         "status": "ok",
         "graph": "healthcare_multi_agent",
         "nodes": [
+            "memory_load",
             "planner",
             "ontology",
             "query",
             "validation",
             "human_gate",
             "execution",
+            "abstention",
             "response",
         ],
         "features": [
@@ -214,13 +228,48 @@ def agent_health():
             "retry_loops",
             "human_in_the_loop",
             "kg_memory",
+            "four_memory",
+            "working_memory",
+            "episodic_memory",
+            "procedural_memory",
+            "semantic_memory",
+            "meta_memory",
             "multi_tenancy",
             "hybrid_retrieval",
+            "retrieval_rerank",
+            "calibrated_abstention",
+            "mandatory_provenance",
+            "structured_responses",
             "guardrails",
             "rbac",
             "async_execution",
             "langsmith",
         ],
+        "memory_debug_context": bool(get_settings().get("memory_debug_context")),
+    }
+
+
+@router.post("/memory/preview")
+def memory_preview(
+    request: MemoryPreviewRequest,
+    tenant: TenantContext = Depends(require_tenant),
+    _principal: Principal = Depends(require_permission(Permission.AGENT_RUN)),
+):
+    """Assemble + enrich memory and print MEMORY DEBUG blocks (no agent graph)."""
+    from agents.memory.preview import run_memory_debug_preview
+
+    session_id = request.session_id or ""
+    merged = run_memory_debug_preview(
+        request.question,
+        session_id=session_id,
+        tenant_id=tenant.tenant_id,
+        source="memory/preview",
+    )
+    return {
+        "session_id": session_id,
+        "meta_memory": (merged.get("meta_memory") if merged else {}),
+        "matched_procedures": (merged.get("matched_procedures") if merged else []),
+        "concept_count": len(merged.get("retrieved_concepts") or []) if merged else 0,
     }
 
 
@@ -237,13 +286,20 @@ def agent_query(
     config = {"configurable": {"thread_id": thread_id}}
 
     try:
-        get_agent_memory().ensure_schema()
+        get_memory_orchestrator().ensure_schema()
     except Exception as exc:
         logger.warning("Could not ensure agent memory schema: %s", exc)
 
     inputs = _build_inputs(
         request, tenant=tenant, principal=principal, thread_id=thread_id, session_id=session_id
     )
+    if get_settings().get("memory_debug_context"):
+        line = (
+            f"\n>>> POST /agent/query session_id={session_id} "
+            f"question={request.question[:120]!r}\n"
+        )
+        sys.stderr.write(line)
+        sys.stderr.flush()
     try:
         return _invoke_graph(inputs, config)
     except HTTPException:
@@ -278,6 +334,7 @@ def agent_query_async(
             "session_id": session_id,
             "question": request.question[:200],
         },
+        tenant_id=tenant.tenant_id,
     )
     return {
         "job_id": job_id,
@@ -291,9 +348,9 @@ def agent_query_async(
 @router.get("/jobs/{job_id}")
 def agent_job(
     job_id: str,
-    _: Principal = Depends(require_permission(Permission.AGENT_RUN)),
+    principal: Principal = Depends(require_permission(Permission.AGENT_RUN)),
 ):
-    rec = job_store.get(job_id)
+    rec = job_store.get_for_tenant(job_id, principal.tenant_id)
     if not rec:
         raise HTTPException(status_code=404, detail="Job not found")
     return rec.to_dict()
@@ -310,7 +367,7 @@ def agent_resume(
     graph = get_agent_graph()
 
     snap = graph.get_state(config)
-    if not snap or not snap.values:
+    if not snap or not snap.values or snap.values.get("tenant_id") != principal.tenant_id:
         raise HTTPException(status_code=404, detail="Unknown thread_id / no checkpoint")
     if not snap.next:
         raise HTTPException(status_code=400, detail="Thread is not awaiting approval")
@@ -334,12 +391,12 @@ def agent_resume(
 @router.get("/state/{thread_id}")
 def agent_state(
     thread_id: str,
-    _: Principal = Depends(require_permission(Permission.AGENT_RUN)),
+    principal: Principal = Depends(require_permission(Permission.AGENT_RUN)),
 ):
     graph = get_agent_graph()
     config = {"configurable": {"thread_id": thread_id}}
     snap = graph.get_state(config)
-    if not snap or not snap.values:
+    if not snap or not snap.values or snap.values.get("tenant_id") != principal.tenant_id:
         raise HTTPException(status_code=404, detail="Unknown thread_id / no checkpoint")
     return {
         "thread_id": thread_id,
@@ -348,11 +405,40 @@ def agent_state(
     }
 
 
+@router.get("/memory/episodes/search")
+def search_episodes(
+    q: str,
+    limit: int = 5,
+    tenant: TenantContext = Depends(require_tenant),
+    _: Principal = Depends(require_permission(Permission.AGENT_RUN)),
+):
+    episodes = get_episodic_memory().search_similar_episodes(
+        q, tenant_id=tenant.tenant_id, limit=limit
+    )
+    return {"query": q, "tenant_id": tenant.tenant_id, "episodes": episodes}
+
+
+@router.get("/memory/procedures")
+def list_procedures(
+    q: str,
+    limit: int = 5,
+    tenant: TenantContext = Depends(require_tenant),
+    _: Principal = Depends(require_permission(Permission.AGENT_RUN)),
+):
+    procedures = get_procedural_memory().match_procedures(
+        q, tenant_id=tenant.tenant_id, limit=limit
+    )
+    return {"query": q, "tenant_id": tenant.tenant_id, "procedures": procedures}
+
+
 @router.get("/memory/{session_id}")
 def agent_memory(
     session_id: str,
     limit: int = 5,
+    tenant: TenantContext = Depends(require_tenant),
     _: Principal = Depends(require_permission(Permission.AGENT_RUN)),
 ):
-    ctx = get_agent_memory().load_context(session_id, limit=limit)
-    return {"session_id": session_id, "context": ctx}
+    ctx = get_episodic_memory().load_context(
+        session_id, limit=limit, tenant_id=tenant.tenant_id
+    )
+    return {"session_id": session_id, "tenant_id": tenant.tenant_id, "context": ctx}

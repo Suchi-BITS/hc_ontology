@@ -8,9 +8,7 @@ import re
 from typing import Any
 
 from langchain_core.prompts import PromptTemplate
-from langchain_ollama import ChatOllama
-
-from agents.state import AgentState
+from core.llm import get_chat_llm
 from core.config import get_settings
 
 logger = logging.getLogger("healthcare_ontology.agent")
@@ -100,7 +98,11 @@ def _parse_json(text: str) -> dict[str, Any] | None:
 
 def planner_node(state: AgentState) -> dict[str, Any]:
     question = (state.get("question") or "").strip()
-    memory_context = state.get("memory_context") or ""
+    memory_context = (
+        state.get("working_context")
+        or state.get("memory_context")
+        or ""
+    )
     settings = get_settings()
     max_retries = int(state.get("max_retries") or settings.get("agent_max_retries", 3))
     override_type = state.get("query_type")
@@ -111,7 +113,7 @@ def planner_node(state: AgentState) -> dict[str, Any]:
 
     planned = None
     try:
-        llm = ChatOllama(model=settings["ollama_model"], temperature=0)
+        llm = get_chat_llm(model=settings["llm_model"], temperature=0)
         raw = llm.invoke(
             _PLANNER_PROMPT.format(question=question, memory_context=memory_context or "(none)")
         )
@@ -138,6 +140,12 @@ def planner_node(state: AgentState) -> dict[str, Any]:
 
     plan = planned.get("plan") or _heuristic_plan(question)["plan"]
     reasoning = planned.get("reasoning") or ""
+
+    # Procedure hint from memory_load
+    procedures = state.get("matched_procedures") or []
+    if procedures and not planned.get("reasoning"):
+        top = procedures[0]
+        reasoning = f"Matched procedure '{top.get('name')}' (score={top.get('match_score')})."
 
     trace.append(f"planner:query_type={query_type}")
     if require_hitl:

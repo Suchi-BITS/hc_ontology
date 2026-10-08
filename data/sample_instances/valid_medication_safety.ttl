@@ -1,0 +1,34 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# A patient with a recorded allergy and a prescription that does NOT conflict with it.
+# Used as the base document for the medication / allergy contract tests.
+hc:GenderFemale a hc:AdministrativeGender .
+hc:MedCategoryAntibiotic a hc:MedicationCategory .
+hc:MedCategoryAnalgesic a hc:MedicationCategory .
+
+hc:Amoxicillin a hc:Medication ;
+    hc:medicationName "Amoxicillin"^^xsd:string ;
+    hc:medicationCategory hc:MedCategoryAntibiotic .
+
+hc:Paracetamol a hc:Medication ;
+    hc:medicationName "Paracetamol"^^xsd:string ;
+    hc:medicationCategory hc:MedCategoryAnalgesic .
+
+hc:Pat a hc:Patient ;
+    hc:firstName "Casey"^^xsd:string ;
+    hc:lastName "Lee"^^xsd:string ;
+    hc:administrativeGender hc:GenderFemale ;
+    hc:dateOfBirth "1985-01-01"^^xsd:date ;
+    hc:bloodGroup "B+"^^xsd:string ;
+    hc:hasMedicalRecord hc:MR ;
+    hc:hasAllergy hc:AllergyAmoxicillin .
+
+hc:MR a hc:MedicalRecord .
+
+hc:AllergyAmoxicillin a hc:Allergy ;
+    hc:allergyToMedication hc:Amoxicillin .
+
+hc:Rx a hc:Prescription ;
+    hc:prescribedFor hc:Pat ;
+    hc:containsMedication hc:Paracetamol .

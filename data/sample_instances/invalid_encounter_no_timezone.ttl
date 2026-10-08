@@ -1,0 +1,13 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Invalid: encounterStart has no time zone, so it does not denote one instant;
+# encounterEnd is also before encounterStart's wall-clock time.
+hc:EncounterTypeAmbulatory a hc:EncounterType .
+hc:PatX a hc:Patient ;
+    hc:hasEncounter hc:EncNoTz .
+
+hc:EncNoTz a hc:Encounter ;
+    hc:encounterType hc:EncounterTypeAmbulatory ;
+    hc:encounterStart "2026-03-01T09:30:00"^^xsd:dateTime ;
+    hc:encounterEnd "2026-03-01T10:00:00Z"^^xsd:dateTime .

@@ -1,0 +1,6 @@
+id,patient_id,encounter_id,name,code_ids,doctor_id,onset_date,status
+DiagnosisHypertension,PatientJohn,Encounter001,Hypertension,Icd10_I10|Snomed_38341003,DrSmith,2026-03-01,active
+DiagnosisFlu,PatientEmma,Encounter002,Influenza,Icd10_J10,DrKumar,2026-03-05,cured
+DiagnosisMigraine,PatientDavid,Encounter003,Migraine,Icd10_G43,DrJohn,2026-03-09,active
+DiagnosisDiabetesAlice,PatientAlice,Encounter004,Diabetes,Icd10_E11|Snomed_44054006,DrKumar,2026-03-12,active
+DiagnosisDiabetesBob,PatientBob,Encounter005,Diabetes,Icd10_E11|Snomed_44054006,DrKumar,2026-03-13,active

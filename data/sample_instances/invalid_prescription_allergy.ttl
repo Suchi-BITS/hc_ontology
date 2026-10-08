@@ -2,10 +2,13 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Invalid: prescription contains a medication the patient is allergic to.
+hc:GenderFemale a hc:AdministrativeGender .
+
 hc:PatientAllergic a hc:Patient ;
     hc:firstName "Casey"^^xsd:string ;
     hc:lastName "Lee"^^xsd:string ;
-    hc:dateOfBirth "1985-01-01"^^xsd:string ;
+    hc:administrativeGender hc:GenderFemale ;
+    hc:dateOfBirth "1985-01-01"^^xsd:date ;
     hc:bloodGroup "B+"^^xsd:string ;
     hc:hasAllergy hc:AllergyPenicillin .
 

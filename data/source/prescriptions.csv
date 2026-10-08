@@ -1,0 +1,6 @@
+id,number,patient_id,doctor_id,medication_ids,dose,date
+Prescription001,RX001,PatientJohn,DrSmith,Aspirin,75 mg once daily,2026-03-01
+PrescriptionHypertensionJohn,RX003,PatientJohn,DrSmith,Amlodipine,5 mg once daily,2026-03-01
+Prescription002,RX002,PatientEmma,DrKumar,Paracetamol|Amoxicillin,As directed,2026-03-01
+PrescriptionDiabetesAlice,RX004,PatientAlice,DrKumar,Metformin,500 mg twice daily,2026-03-01
+PrescriptionDiabetesBob,RX005,PatientBob,DrKumar,InsulinGlargine,10 units nightly,2026-03-01

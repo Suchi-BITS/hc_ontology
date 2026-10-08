@@ -1,21 +1,14 @@
-import os
+"""Authentication dependency used by every router.
 
-from fastapi import HTTPException, Security
-from fastapi.security import APIKeyHeader
+``verify_api_key`` keeps its historical name so router wiring did not change, but it no longer compares
+one shared key: it resolves the caller's server-side Identity (core/security.py) and answers 401 if
+there is none. See docs/security-architecture.md.
+"""
 
-from core.config import get_settings
+from fastapi import Depends
 
-_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+from core.security import Identity, authenticate_request
 
 
-async def verify_api_key(api_key: str = Security(_api_key_header)):
-    """
-    Optional API key protection.
-    If API_KEY is not set in the environment, all requests are allowed.
-    """
-    expected = get_settings()["api_key"]
-    if not expected:
-        return None
-    if api_key != expected:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    return api_key
+async def verify_api_key(identity: Identity = Depends(authenticate_request)) -> Identity:
+    return identity

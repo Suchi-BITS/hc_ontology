@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from typing import Callable, Iterable
 
 from core.query_validator import (
@@ -39,6 +38,45 @@ FORBIDDEN_SPARQL_PHRASES = {
     "INSERT{",
     "DELETE{",
 }
+
+
+def parsed_query_problems(query: str) -> list[str]:
+    """Problems found by walking the PARSED query: only a SELECT, no dataset clauses, no SERVICE.
+
+    SERVICE would make the server send the query (and its bindings) to a URL chosen by the caller;
+    FROM / FROM NAMED would make it fetch a document chosen by the caller. Neither is a read of our graph.
+    """
+    try:
+        from rdflib.plugins.sparql.parser import parseQuery
+
+        parsed = parseQuery(query)
+    except Exception:
+        return []  # not parseable: reported by the syntax stage
+    body = parsed[1]
+    problems: list[str] = []
+    if getattr(body, "name", None) != "SelectQuery":
+        problems.append(f"only SELECT queries are allowed (got {getattr(body, 'name', 'unknown')})")
+
+    def walk(node):
+        name = getattr(node, "name", None)
+        if name == "ServiceGraphPattern":
+            problems.append("SERVICE (federated queries) is not allowed")
+        if name == "DatasetClause":
+            problems.append("FROM / FROM NAMED dataset clauses are not allowed")
+        children = []
+        if hasattr(node, "values") and callable(node.values):
+            children = list(node.values())
+        elif isinstance(node, (list, tuple)):
+            children = list(node)
+        for child in children:
+            if hasattr(child, "values") or isinstance(child, (list, tuple)):
+                walk(child)
+
+    walk(body)
+    clauses = body.get("datasetClause") if hasattr(body, "get") else None
+    if isinstance(clauses, list) and clauses:  # (CompValue.get returns the key itself when absent)
+        problems.append("FROM / FROM NAMED dataset clauses are not allowed")
+    return sorted(set(problems))
 
 
 class SparqlQueryValidator(QueryValidator):
@@ -108,6 +146,17 @@ class SparqlQueryValidator(QueryValidator):
                 error=f"Forbidden SPARQL write/update keywords: {', '.join(hits)}",
                 details={"forbidden": hits},
             )
+        # Structural check on the PARSED query (not on its text): a query that does not parse is left
+        # to the syntax stage; one that parses must be a plain SELECT over the local graph.
+        problems = parsed_query_problems(query)
+        if problems:
+            return QueryValidationResult(
+                valid=False,
+                query=query,
+                stage="safety",
+                error=f"SPARQL query refused: {'; '.join(problems)}",
+                details={"forbidden": [], "policy_violations": problems},
+            )
         return QueryValidationResult(valid=True, query=query)
 
     def check_schema(self, query: str) -> QueryValidationResult:
@@ -115,7 +164,9 @@ class SparqlQueryValidator(QueryValidator):
             return QueryValidationResult(valid=True, query=query)
 
         # Terms after hc: or bare :LocalName in typical course queries
-        refs = set(re.findall(r"(?:hc:|:)([A-Za-z_][A-Za-z0-9_]*)", query))
+        # Only the ontology's own prefix (hc:Name) or the empty prefix (:Name). A term such as
+        # rdfs:subClassOf has a different prefix and is not an ontology term.
+        refs = set(re.findall(r"(?<![A-Za-z0-9_])(?:hc)?:([A-Za-z_][A-Za-z0-9_]*)", query))
         # Filter RDF/OWL builtins and variables already excluded by pattern
         builtins = {
             "type",
@@ -149,16 +200,7 @@ class SparqlQueryValidator(QueryValidator):
             details={"limit_injected": self.default_limit},
         )
 
-    def execute_with_timeout(
-        self,
-        execute_fn: Callable[[str], list],
-        query: str,
-    ) -> list:
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(execute_fn, query)
-            try:
-                return fut.result(timeout=self.timeout_seconds)
-            except FuturesTimeout as exc:
-                raise TimeoutError(
-                    f"SPARQL execution exceeded {self.timeout_seconds}s"
-                ) from exc
+    # There is deliberately no execute_with_timeout here. The version that used to live in this class ran
+    # the query on a thread inside `with ThreadPoolExecutor(...)`: on timeout the `with` block still waited
+    # for the thread to finish, so the "timeout" never bounded anything. Bounded execution is
+    # core/sparql_exec.py (a killable worker process); see docs/security-architecture.md.

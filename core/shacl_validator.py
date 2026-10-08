@@ -8,13 +8,58 @@ import tempfile
 from pathlib import Path
 from typing import Iterable
 
-from rdflib import Graph
+from rdflib import RDF, RDFS, Graph, URIRef
 
 from core.shacl_exceptions import ShaclDataLoadError, ShaclValidationError
 from core.shacl_loader import ShaclLoader
 from core.shacl_report import ShaclReportFormatter, ValidationResult
 
 logger = logging.getLogger("healthcare_ontology.shacl")
+
+
+def entail_hierarchy(graph: Graph) -> Graph:
+    """Return a copy of ``graph`` with ONLY subclass and subproperty entailments added.
+
+    Why not pySHACL's ``inference="rdfs"``? Full RDFS inference also applies ``rdfs:domain``
+    and ``rdfs:range`` *as entailments*: pointing ``hc:hasEncounter`` at a Doctor would make
+    that Doctor "an Encounter", and the ``sh:class`` check meant to catch the mistake would
+    pass. Validation must treat a domain/range violation as an error, not as a new fact.
+
+    What is entailed: a node typed with a class is also typed with its superclasses (so a
+    Diagnosis is a Condition), and a statement made with a property also holds for its
+    super-properties (so hasDiagnosis implies hasCondition).
+    """
+    out = Graph()
+    for triple in graph:
+        out.add(triple)
+
+    def closure(pairs):
+        direct: dict = {}
+        for child, parent in pairs:
+            if isinstance(child, URIRef) and isinstance(parent, URIRef) and child != parent:
+                direct.setdefault(child, set()).add(parent)
+        result: dict = {}
+        for start in direct:
+            seen, stack = set(), list(direct[start])
+            while stack:
+                current = stack.pop()
+                if current not in seen:
+                    seen.add(current)
+                    stack.extend(direct.get(current, ()))
+            result[start] = seen
+        return result
+
+    super_classes = closure(graph.subject_objects(RDFS.subClassOf))
+    for node, cls in list(graph.subject_objects(RDF.type)):
+        for ancestor in super_classes.get(cls, ()):
+            out.add((node, RDF.type, ancestor))
+
+    super_props = closure(graph.subject_objects(RDFS.subPropertyOf))
+    if super_props:
+        for s, p, o in list(graph):
+            for ancestor in super_props.get(p, ()):
+                out.add((s, ancestor, o))
+    return out
 
 
 class ShaclValidator:
@@ -24,13 +69,14 @@ class ShaclValidator:
         self,
         loader: ShaclLoader | None = None,
         formatter: ShaclReportFormatter | None = None,
-        owl_file: str | None = None,
+        owl_file=None,
         validation_mode: str = "warn",
         data_dir: str | Path | None = None,
     ):
         self.loader = loader or ShaclLoader()
         self.formatter = formatter or ShaclReportFormatter()
-        self.owl_file = owl_file or "healthcare_ontology.owl"
+        # A Dataset (schema + sample data) or a path to one RDF file; None means the configured dataset.
+        self.owl_file = owl_file
         self.validation_mode = (validation_mode or "warn").lower()
         self.data_dir = Path(data_dir) if data_dir else None
 
@@ -81,6 +127,8 @@ class ShaclValidator:
             else self.loader.list_shape_files()
         )
 
+        data_graph = entail_hierarchy(data_graph)
+
         try:
             from pyshacl import validate
         except ImportError as exc:
@@ -99,7 +147,7 @@ class ShaclValidator:
                 allow_warnings=warn_ok,
                 meta_shacl=False,
                 advanced=True,
-                inference="rdfs",
+                inference="none",
                 inplace=False,
             )
         except Exception as exc:
@@ -120,12 +168,17 @@ class ShaclValidator:
         shape_files: Iterable[str] | None = None,
         include_turtle: bool = False,
     ) -> ValidationResult:
-        path = Path(owl_path) if owl_path else Path(self.owl_file)
-        data_graph = self.load_data_graph(path=path, rdf_format="xml")
+        from core.dataset import DatasetError, as_dataset
+
+        dataset = as_dataset(owl_path if owl_path else self.owl_file)
+        try:
+            data_graph = dataset.graph()
+        except DatasetError as exc:
+            raise ShaclDataLoadError(str(exc)) from exc
         return self.validate_graph(
             data_graph,
             shape_files=shape_files,
-            data_source=str(path),
+            data_source=dataset.label,
             include_turtle=include_turtle,
         )
 
@@ -200,7 +253,9 @@ class ShaclValidator:
 
     def health(self) -> dict:
         shapes = self.loader.health()
-        owl = Path(self.owl_file)
+        from core.dataset import as_dataset
+
+        dataset = as_dataset(self.owl_file)
         try:
             import pyshacl  # noqa: F401
 
@@ -211,8 +266,8 @@ class ShaclValidator:
         return {
             "status": "healthy" if shapes["ready"] and pyshacl_ok else "degraded",
             "pyshacl_installed": pyshacl_ok,
-            "owl_file": str(owl),
-            "owl_exists": owl.is_file(),
+            "owl_file": dataset.label,
+            "owl_exists": all(p.is_file() for p in dataset.paths),
             "validation_mode": self.validation_mode,
             "data_dir": str(self.data_dir) if self.data_dir else None,
             "shapes": shapes,

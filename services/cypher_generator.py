@@ -1,5 +1,5 @@
 # cypher_generator.py
-# Natural Language -> Cypher via LangChain + Ollama (+ validation / repair)
+# Natural Language -> Cypher via LangChain + OpenAI (+ validation / repair)
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import time
 from typing import Dict, List
 
 from langchain_core.prompts import PromptTemplate
-from langchain_ollama import ChatOllama
 
 from core.cypher_validator import CypherQueryValidator
+from core.llm import get_chat_llm
 from core.metrics import metrics
 from core.query_cache import query_cache
 from core.query_validator import QueryValidationError
@@ -25,7 +25,7 @@ class CypherGenerator:
             ↓
         LangChain
             ↓
-      Ollama (qwen2.5)
+      OpenAI
             ↓
          Cypher
             ↓
@@ -35,12 +35,13 @@ class CypherGenerator:
     def __init__(
         self,
         ontology,
-        model_name: str = "qwen2.5:latest",
+        model_name: str = "gpt-4.1-mini",
         explain_fn=None,
     ):
         self.ontology = ontology
         self.explain_fn = explain_fn
-        self.llm = ChatOllama(model=model_name, temperature=0)
+        self.model_name = model_name
+        self.llm = get_chat_llm(model=model_name, temperature=0)
         self.prompt = PromptTemplate(
             input_variables=[
                 "classes",
@@ -59,12 +60,22 @@ Do not surround with ```cypher.
 
 Graph model:
 
-- Each individual is a node with label from its class (e.g. Patient, Doctor, Diagnosis).
-- Every node has a `name` property (string) with the individual name.
+- The graph is a projection of the RDF ontology. Each individual is a node that carries
+  ALL of its classes as labels, including superclasses (a diagnosis is both :Diagnosis and
+  :Condition; a doctor is both :Doctor and :Practitioner and :Person).
+- Every node has `iri` (its stable identity) and `name` (the display name, the IRI local name).
 - Object properties become relationships with UPPERCASE type names
-  (e.g. hasDiagnosis -> HASDIAGNOSIS).
-- Data properties are stored as node properties using camelCase names
-  (e.g. diagnosisName, patientAge).
+  (e.g. hasDiagnosis -> HASDIAGNOSIS). Inverse and super-property relationships also exist
+  (e.g. DIAGNOSISFORPATIENT, HASCONDITION).
+- Data properties are node properties with camelCase names and native types
+  (dates are Cypher dates). Single-valued properties are scalars (d.diagnosisName = 'Diabetes');
+  contact properties (phoneNumber, emailAddress, address, emergencyContact, observationValueText)
+  are lists - test them with `'x' IN n.phoneNumber`.
+- Specialty, gender, encounter type and medication category are linked concept nodes
+  (e.g. (d:Doctor)-[:HASSPECIALTY]->(s:Specialty)), not properties.
+- Medications are NOT linked directly to patients. Use Prescription as the bridge:
+  (rx:Prescription)-[:PRESCRIBEDFOR]->(p:Patient)
+  (rx)-[:CONTAINSMEDICATION]->(m:Medication)
 
 Available node labels (classes):
 
@@ -85,7 +96,9 @@ Rules:
 3. Do NOT use CREATE, MERGE, SET, DELETE, DETACH, REMOVE, DROP, or CALL DBMS.
 4. Prefer matching nodes by label and `name` when filtering individuals.
 5. Include LIMIT 50 unless the question needs a different bound.
-6. Return ONLY the Cypher query.
+6. RETURN must list at least one expression (e.g. RETURN p.name, d.diagnosisName). Never leave RETURN empty.
+7. For patient diagnoses use (p:Patient)-[:HASDIAGNOSIS]->(d:Diagnosis), not DIAGNOSISFORPATIENT.
+8. Return ONLY the Cypher query.
 
 Question:
 
@@ -122,13 +135,40 @@ Cypher:
         cypher = cypher.strip()
         cypher = re.sub(r"```cypher", "", cypher, flags=re.IGNORECASE)
         cypher = cypher.replace("```", "").strip()
-        lines = []
-        for line in cypher.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("//"):
-                continue
-            lines.append(line)
-        return "\n".join(lines).strip()
+
+        match = re.search(
+            r"\bMATCH\b.+?\bRETURN\b.+?(?:\nLIMIT\s+\d+)?",
+            cypher,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if match:
+            block = match.group(0)
+            lines = [
+                line
+                for line in block.splitlines()
+                if line.strip() and not line.strip().startswith("//")
+            ]
+            cypher = "\n".join(lines).strip()
+        else:
+            lines = []
+            started = False
+            for line in cypher.splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("//"):
+                    continue
+                if re.match(r"^MATCH\b", stripped, re.IGNORECASE):
+                    started = True
+                if started:
+                    lines.append(line)
+            cypher = "\n".join(lines).strip()
+
+        return self.normalize_cypher(cypher)
+
+    def normalize_cypher(self, cypher: str) -> str:
+        """Repair common LLM mistakes before validation/execution."""
+        from core.cypher_repair import repair_cypher
+
+        return repair_cypher(cypher)
 
     def _build_validator(self) -> CypherQueryValidator:
         from core.config import get_settings
@@ -178,8 +218,24 @@ Broken query:
 Validation error:
 {error}
 
+Graph model reminders:
+- Medications reach patients through Prescription nodes, not direct edges.
+  (rx:Prescription)-[:PRESCRIBEDFOR]->(p:Patient)
+  (rx)-[:CONTAINSMEDICATION]->(m:Medication)
+- Diagnoses use (p:Patient)-[:HASDIAGNOSIS]->(d:Diagnosis).
+
+Available node labels (classes):
+{chr(10).join(f"- {name}" for name in self.get_classes())}
+
+Available relationship types (from object properties):
+{chr(10).join(f"- {name}" for name in self.get_object_properties())}
+
+Available node properties (from data properties):
+{chr(10).join(f"- {name}" for name in self.get_data_properties())}
+
 Return ONLY a read-only MATCH ... RETURN Cypher query.
-Do not use CREATE, MERGE, SET, DELETE, DETACH, REMOVE, DROP, or CALL DBMS.
+Use ONLY the labels, relationships, and properties listed above.
+Do not explain. Do not repeat these instructions in your answer.
 """
         response = self.llm.invoke(repair_prompt)
         return self.clean_cypher(response.content)
@@ -189,7 +245,10 @@ Do not use CREATE, MERGE, SET, DELETE, DETACH, REMOVE, DROP, or CALL DBMS.
         cached = query_cache.get(cache_key)
         if cached is not None:
             metrics.incr("cypher_cache_hit")
-            return {**cached, "cached": True}
+            out = dict(cached)
+            if out.get("generated_cypher"):
+                out["generated_cypher"] = self.normalize_cypher(out["generated_cypher"])
+            return {**out, "cached": True}
 
         metrics.incr("cypher_llm_generate")
         cypher = self.generate(question)
@@ -197,6 +256,7 @@ Do not use CREATE, MERGE, SET, DELETE, DETACH, REMOVE, DROP, or CALL DBMS.
         started = time.perf_counter()
 
         for attempt in range(max_attempts):
+            cypher = self.normalize_cypher(cypher)
             last = self.validate(cypher)
             if last.valid:
                 elapsed_ms = int((time.perf_counter() - started) * 1000)

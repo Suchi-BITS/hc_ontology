@@ -9,6 +9,10 @@ class SparqlRequest(BaseModel):
 
 class NLQueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
+    session_id: str | None = Field(
+        default=None,
+        description="Optional session id for episodic memory + MEMORY_DEBUG_CONTEXT logs",
+    )
 
 
 class LLMQueryRequest(BaseModel):
@@ -32,11 +36,13 @@ _VALID_PATIENT_TURTLE = """\
 @prefix hc: <http://example.org/healthcare-hospital.owl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+hc:GenderFemale a hc:AdministrativeGender .
+
 hc:PatientAlice a hc:Patient ;
     hc:firstName "Alice"^^xsd:string ;
     hc:lastName "Nguyen"^^xsd:string ;
-    hc:gender "female"^^xsd:string ;
-    hc:dateOfBirth "1990-04-12"^^xsd:string ;
+    hc:administrativeGender hc:GenderFemale ;
+    hc:dateOfBirth "1990-04-12"^^xsd:date ;
     hc:bloodGroup "O+"^^xsd:string ;
     hc:hasDiagnosis hc:DxAlice ;
     hc:hasMedicalRecord hc:MRAlice .

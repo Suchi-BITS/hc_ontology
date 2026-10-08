@@ -1,15 +1,13 @@
-"""Ontology Agent — hybrid graph+vector retrieval + KG memory context."""
+"""Ontology Agent — semantic memory enrichment via hybrid retrieval."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from agents.memory import get_agent_memory
+from agents.memory import get_memory_orchestrator
 from agents.state import AgentState
-from core.dependencies import get_ontology
 from enterprise.cost import cost_tracker
-from enterprise.hybrid_retrieval import hybrid_retrieve
 from enterprise.observability import trace_span
 
 logger = logging.getLogger("healthcare_ontology.agent")
@@ -17,86 +15,50 @@ logger = logging.getLogger("healthcare_ontology.agent")
 
 def ontology_node(state: AgentState) -> dict[str, Any]:
     question = state.get("question") or ""
-    session_id = state.get("session_id") or ""
     tenant_id = state.get("tenant_id") or "default"
     trace = list(state.get("trace") or [])
     errors = list(state.get("errors") or [])
     trace.append("ontology:start")
 
-    memory_context = state.get("memory_context") or ""
-    if session_id and not memory_context:
+    orchestrator = get_memory_orchestrator()
+    enriched: dict[str, Any] = {}
+    with trace_span("ontology.semantic_memory", {"tenant_id": tenant_id}):
         try:
-            memory_context = get_agent_memory().load_context(session_id)
-        except Exception as exc:
-            errors.append(f"memory_load: {exc}")
-            logger.warning("Memory load failed: %s", exc)
-
-    retrieved: list[dict[str, Any]] = []
-    hybrid_meta: dict[str, Any] = {}
-    with trace_span("ontology.hybrid_retrieve", {"tenant_id": tenant_id}):
-        try:
-            hybrid = hybrid_retrieve(question, top_k=8)
-            retrieved = hybrid.get("results") or []
-            hybrid_meta = {
-                "vector_count": hybrid.get("vector_count"),
-                "graph_count": hybrid.get("graph_count"),
-            }
+            enriched = orchestrator.enrich_semantic(state)
             cost_tracker.record(tenant_id, "embedding_call", units=1, meta={"node": "ontology"})
         except Exception as exc:
-            errors.append(f"hybrid_retrieve: {exc}")
-            logger.warning("Hybrid retrieval failed: %s", exc)
+            errors.append(f"semantic_memory: {exc}")
+            logger.warning("Semantic memory enrichment failed: %s", exc)
+            enriched = {
+                "ontology_context": state.get("ontology_context") or "",
+                "retrieved_concepts": state.get("retrieved_concepts") or [],
+                "hybrid_meta": state.get("hybrid_meta") or {},
+                "retrieval_meta": state.get("retrieval_meta") or {},
+                "working_context": state.get("working_context") or state.get("memory_context") or "",
+                "memory_context": state.get("memory_context") or "",
+                "memory_bundle": state.get("memory_bundle") or {},
+                "working_events": state.get("working_events") or [],
+            }
 
-    try:
-        onto = get_ontology()
-        classes = onto.get_classes()[:40]
-        obj_props = onto.get_object_properties()[:40]
-        data_props = onto.get_data_properties()[:40]
-    except Exception as exc:
-        classes, obj_props, data_props = [], [], []
-        errors.append(f"schema: {exc}")
+    retrieved = enriched.get("retrieved_concepts") or []
+    retrieval_meta = enriched.get("retrieval_meta") or {}
+    trace.append(f"ontology:semantic={len(retrieved)}")
+    if retrieval_meta.get("error_budget"):
+        eb = retrieval_meta["error_budget"]
+        trace.append(
+            f"ontology:error_budget:top={eb.get('top_rerank_score')}:"
+            f"residual={eb.get('residual_retrieval_risk')}"
+        )
 
-    ontology_id = state.get("ontology_id") or "hc-core"
-    ontology_version = state.get("ontology_version") or ""
-    concept_lines = []
-    for item in retrieved[:8]:
-        if isinstance(item, dict):
-            name = item.get("name") or ""
-            score = item.get("rrf_score") or item.get("score")
-            src = item.get("source") or ""
-            desc = item.get("description") or ""
-            line = f"- {name}"
-            if score is not None:
-                line += f" (score={score}"
-                if src:
-                    line += f", src={src}"
-                line += ")"
-            if desc:
-                line += f": {str(desc)[:160]}"
-            concept_lines.append(line)
-        else:
-            concept_lines.append(f"- {item}")
-
-    ontology_context = "\n".join(
-        [
-            f"Ontology: {ontology_id} version={ontology_version or 'active'}",
-            "Relevant concepts (hybrid graph+vector):",
-            *(concept_lines or ["- (none retrieved)"]),
-            "",
-            "Schema excerpt — classes:",
-            ", ".join(classes) if classes else "(unavailable)",
-            "Object properties:",
-            ", ".join(obj_props) if obj_props else "(unavailable)",
-            "Data properties:",
-            ", ".join(data_props) if data_props else "(unavailable)",
-        ]
-    )
-
-    trace.append(f"ontology:hybrid={len(retrieved)}")
     return {
-        "ontology_context": ontology_context,
+        "ontology_context": enriched.get("ontology_context") or "",
         "retrieved_concepts": retrieved,
-        "hybrid_meta": hybrid_meta,
-        "memory_context": memory_context,
+        "hybrid_meta": enriched.get("hybrid_meta") or {},
+        "retrieval_meta": retrieval_meta,
+        "memory_bundle": enriched.get("memory_bundle") or state.get("memory_bundle") or {},
+        "working_context": enriched.get("working_context") or "",
+        "memory_context": enriched.get("memory_context") or enriched.get("working_context") or "",
+        "working_events": enriched.get("working_events") or state.get("working_events") or [],
         "status": "retrieving",
         "errors": errors,
         "trace": trace,

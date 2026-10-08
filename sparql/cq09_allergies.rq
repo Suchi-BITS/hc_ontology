@@ -1,0 +1,9 @@
+# CQ09: Which patients are allergic to which medication?
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?patient ?medication WHERE {
+  ?patient hc:hasAllergy ?allergy .
+  ?allergy hc:allergyToMedication ?medication .
+}

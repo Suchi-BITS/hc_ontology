@@ -1,0 +1,3 @@
+# Everything needed to develop and test.
+-r requirements.txt
+pytest==8.4.2

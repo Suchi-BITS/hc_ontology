@@ -1,38 +1,43 @@
+# NOTE: literals compared by sh:in / sh:hasValue are written with explicit ^^xsd:string because
+# the OWL file (written by Owlready2) types every string literal explicitly and rdflib does not
+# treat "x" and "x"^^xsd:string as equal.
 @prefix sh:     <http://www.w3.org/ns/shacl#> .
 @prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix hc:     <http://example.org/healthcare-hospital.owl#> .
 @prefix shapes: <http://example.org/healthcare-shapes#> .
 
-# Reusable base shape for the Person hierarchy (Patient, Doctor, Nurse, …).
-# No sh:targetClass here — domain shapes compose it via sh:node.
+# Reusable base shape for the Person hierarchy (Patient, Practitioner, ...).
+# It holds only DATATYPE / MAX-COUNT / VALUE-CLASS rules that hold for every
+# person. "Required" rules (minCount) live in the role shapes so that a path is
+# never required at two severities for the same focus node.
 
 shapes:PersonShape
     a sh:NodeShape ;
     sh:property [
         sh:path hc:firstName ;
         sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:severity sh:Warning ;
-        sh:message "Person should have a firstName." ;
+        sh:message "firstName must be a string." ;
     ] ;
     sh:property [
         sh:path hc:lastName ;
         sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:severity sh:Warning ;
-        sh:message "Person should have a lastName." ;
-    ] ;
-    sh:property [
-        sh:path hc:gender ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:severity sh:Warning ;
-        sh:message "Person should have a gender." ;
+        sh:message "lastName must be a string." ;
     ] ;
     sh:property [
         sh:path hc:dateOfBirth ;
-        sh:datatype xsd:string ;
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:message "dateOfBirth must be a single xsd:date (a calendar date, no time zone)." ;
+    ] ;
+    sh:property [
+        sh:path hc:administrativeGender ;
+        sh:class hc:AdministrativeGender ;
+        sh:maxCount 1 ;
+        sh:message "administrativeGender must be a single hc:AdministrativeGender concept." ;
+    ] ;
+    sh:property [
+        sh:path hc:administrativeGender ;
         sh:minCount 1 ;
         sh:severity sh:Warning ;
-        sh:message "Person should have a dateOfBirth." ;
+        sh:message "Person should have an administrativeGender." ;
     ] .

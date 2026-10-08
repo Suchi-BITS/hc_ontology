@@ -1,0 +1,7 @@
+id,kind,first_name,last_name,gender,date_of_birth,specialty,department,license,years_of_experience
+DrSmith,Doctor,Robert,Smith,Male,1970-05-17,Cardiology,CardiologyDept,DOC1001,15
+DrJohn,Doctor,John,Mathew,Male,1975-09-02,Neurology,OncologyDept,DOC1002,
+DrWilliams,Doctor,William,Turner,Male,1968-01-29,Surgery,EmergencyDept,DOC1003,
+DrKumar,Doctor,Anita,Kumar,Female,1980-12-11,InternalMedicine,CardiologyDept,DOC1004,
+NurseMary,Nurse,Mary,Jones,Female,1988-04-03,,CardiologyDept,,
+NurseRita,Nurse,Rita,Singh,Female,1991-08-21,,ICUDept,,

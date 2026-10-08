@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   IMAGE_NAME: healthcare-ontology-api
 
@@ -38,7 +41,6 @@ jobs:
             type=sha,prefix=
             type=ref,event=branch
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -63,7 +65,7 @@ jobs:
           docs = list(yaml.safe_load_all(path.read_text()))
           assert docs, "empty manifests"
           kinds = {d.get("kind") for d in docs if d}
-          required = {"Namespace", "ConfigMap", "Secret", "Deployment", "Service", "HorizontalPodAutoscaler", "Ingress"}
+          required = {"Namespace", "ConfigMap", "Deployment", "Service", "HorizontalPodAutoscaler", "Ingress"}
           missing = required - kinds
           if missing:
               raise SystemExit(f"Missing K8s kinds: {missing}")

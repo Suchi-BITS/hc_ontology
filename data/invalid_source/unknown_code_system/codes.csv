@@ -1,0 +1,13 @@
+id,system,code,display
+Icd10_I10,icd10,I10,Essential (primary) hypertension
+Icd10_J10,icd10,J10,Influenza due to other identified influenza virus
+Icd10_G43,icd9,G43,Migraine
+Icd10_E11,icd10,E11,Type 2 diabetes mellitus
+Snomed_38341003,snomed,38341003,Hypertensive disorder
+Snomed_44054006,snomed,44054006,Diabetes mellitus type 2
+Loinc_8480_6,loinc,8480-6,Systolic blood pressure
+Loinc_4548_4,loinc,4548-4,Hemoglobin A1c/Hemoglobin.total in Blood
+Rxnorm_6809,rxnorm,6809,Metformin
+Rxnorm_1191,rxnorm,1191,Aspirin
+Rxnorm_723,rxnorm,723,Amoxicillin
+Rxnorm_161,rxnorm,161,Acetaminophen

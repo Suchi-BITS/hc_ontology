@@ -1,0 +1,7 @@
+id,name,categories,code_id
+Paracetamol,Paracetamol,Analgesic,Rxnorm_161
+Aspirin,Aspirin,Analgesic|Antiplatelet,Rxnorm_1191
+Amoxicillin,Amoxicillin,Antibiotic,Rxnorm_723
+Metformin,Metformin,Antidiabetic,Icd10_E11
+InsulinGlargine,Insulin glargine,Antidiabetic,
+Amlodipine,Amlodipine,Antihypertensive,

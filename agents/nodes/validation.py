@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from agents.memory.debug_context import log_memory_phase
 from agents.state import AgentState
 from core.cypher_validator import CypherQueryValidator
 from core.dependencies import get_cypher_generator, get_ontology, get_sparql_generator
@@ -79,6 +80,21 @@ def validation_node(state: AgentState) -> dict[str, Any]:
         errors.append(f"validation: {exc}")
 
     trace.append(f"validation:{'ok' if ok else 'fail'}:{stage or '-'}")
+    if not ok:
+        attempts = int(state.get("query_attempts") or 0)
+        max_retries = int(state.get("max_retries") or 3)
+        log_memory_phase(
+            "validation (fail → retry)" if attempts < max_retries else "validation (fail → exhausted)",
+            question=state.get("question") or "",
+            after={
+                "validation_error": err or "validation failed",
+                "validation_stage": stage,
+                "draft_query_preview": (draft or "")[:500],
+                "query_attempts": attempts,
+                "max_retries": max_retries,
+                "will_retry": attempts < max_retries,
+            },
+        )
     return {
         "validation_ok": ok,
         "validation_error": None if ok else (err or "validation failed"),

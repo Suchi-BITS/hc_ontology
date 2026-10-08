@@ -1,0 +1,19 @@
+@prefix hc:   <http://example.org/healthcare-hospital.owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# Invalid: ONE Diagnosis individual shared by two patients. A Condition record
+# belongs to one patient; the kind of disease is expressed by its code, not by
+# reusing the individual. (The pre-redesign sample data did exactly this.)
+#
+# The two schema triples below are part of the DATA graph on purpose: ConditionShape
+# targets hc:Condition and uses hc:hasCondition, and pySHACL's RDFS inference can
+# only connect them to hc:Diagnosis / hc:hasDiagnosis if it can see the subclass and
+# subproperty axioms. (validate_ontology() has them because the TBox is in the OWL file.)
+hc:Diagnosis rdfs:subClassOf hc:Condition .
+hc:hasDiagnosis rdfs:subPropertyOf hc:hasCondition .
+
+hc:PatA a hc:Patient ; hc:hasDiagnosis hc:DxShared .
+hc:PatB a hc:Patient ; hc:hasDiagnosis hc:DxShared .
+hc:DxShared a hc:Diagnosis ;
+    hc:diagnosisName "Diabetes"^^xsd:string .

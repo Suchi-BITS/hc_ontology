@@ -6,6 +6,8 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, 
 from fastapi.responses import HTMLResponse
 
 from core.auth import verify_api_key
+from core.authz import Permission, require_permission
+from core.config import get_settings
 from core.dependencies import get_shacl_validator
 from core.schemas import ValidateOntologyRequest, ValidateRdfRequest
 from core.shacl_exceptions import (
@@ -15,7 +17,25 @@ from core.shacl_exceptions import (
 )
 from core.shacl_validator import ShaclValidator
 
-router = APIRouter(tags=["SHACL"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(
+    tags=["SHACL"],
+    dependencies=[Depends(verify_api_key), Depends(require_permission(Permission.ONTOLOGY_READ))],
+)
+
+
+def _inside_project(path_text: str) -> str:
+    """Reject any server path outside the project or data directory (no arbitrary file reads)."""
+    from pathlib import Path
+
+    settings = get_settings()
+    candidate = Path(path_text)
+    if not candidate.is_absolute():
+        candidate = Path(settings["project_root"]) / candidate
+    resolved = candidate.resolve()
+    roots = [Path(settings["project_root"]).resolve(), Path(settings["data_dir"]).resolve()]
+    if not any(resolved == r or r in resolved.parents for r in roots):
+        raise HTTPException(status_code=400, detail="owl_path must be inside the project directory")
+    return str(resolved)
 
 # In-memory last report for GET /validation/report
 _last_report: dict | None = None
@@ -94,9 +114,10 @@ def validate_ontology(
     validator: ShaclValidator = Depends(get_shacl_validator),
 ):
     """Validate the project healthcare OWL ontology against SHACL shapes."""
+    owl_path = _inside_project(request.owl_path) if request.owl_path else None
     try:
         result = validator.validate_ontology(
-            owl_path=request.owl_path,
+            owl_path=owl_path,
             shape_files=request.shape_files,
             include_turtle=request.include_turtle,
         )

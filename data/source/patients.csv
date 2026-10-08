@@ -1,0 +1,6 @@
+id,first_name,last_name,gender,date_of_birth,blood_group,mrn
+PatientJohn,John,Doe,Male,1985-03-14,O+,MRN-000123
+PatientEmma,Emma,Wilson,Female,1992-07-22,A+,
+PatientDavid,David,Brown,Male,1978-11-03,B+,
+PatientAlice,Alice,Martinez,Female,1969-02-09,A+,
+PatientBob,Bob,Chen,Male,1974-06-30,B+,

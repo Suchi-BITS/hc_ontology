@@ -1,0 +1,11 @@
+# CQ11: Which patients are prescribed an antidiabetic medication? (category is data, not a class)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?patient WHERE {
+  ?rx hc:prescribedFor ?patient ;
+      hc:containsMedication ?m .
+  ?m hc:medicationCategory hc:MedCategoryAntidiabetic .
+}
+ORDER BY ?patient

@@ -1,17 +1,43 @@
+# Python environments and caches
 venv/
+.venv/
+env/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Secrets and local configuration (keep only .env.example in git)
 .env
+.credentials.json
+*.credentials.json
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+*.secret
+.streamlit/secrets.toml
+
+# Logs and editor/OS files
 *.log
 .DS_Store
 .idea/
 .vscode/
+
+# Ontology backups
 *.owl.bak
 healthcare_ontology.owl~
+
+# Generated validation reports
 validation_reports/*
 !validation_reports/.gitignore
 !validation_reports/.gitkeep

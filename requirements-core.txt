@@ -1,0 +1,17 @@
+# CORE dependencies: ontology, RDF/OWL, SHACL, SPARQL, the graph projection and the HTTP API.
+# No LLM, no agent framework, no vector index. Install with:
+#   pip install -r requirements-core.txt -c constraints.txt
+# The full stack (requirements.txt) adds the optional AI layer: see docs/core-vs-ai-architecture.md.
+# Every line here must also appear, identically, in requirements.txt (tests/test_architecture_boundaries.py).
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+neo4j==6.2.0
+owlready2==0.50
+python-dotenv==1.2.2
+PyYAML>=6.0.1
+rdflib>=7.4.0,<8
+httpx==0.28.1
+pyshacl>=0.26.0,<0.31
+python-multipart==0.0.20
+certifi>=2024.6.0
+truststore>=0.10.0

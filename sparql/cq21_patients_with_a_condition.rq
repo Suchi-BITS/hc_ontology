@@ -1,0 +1,10 @@
+# CQ21: Which patients have a condition of any kind? (needs the class hierarchy: diagnoses are asserted as Diagnosis, the question asks for Condition)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?patient WHERE {
+  ?patient hc:hasDiagnosis ?x .
+  ?x a hc:Condition .
+}
+ORDER BY ?patient

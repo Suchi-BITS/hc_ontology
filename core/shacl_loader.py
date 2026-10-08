@@ -64,7 +64,8 @@ class ShaclLoader:
     def resolve_path(self, name: str) -> Path:
         """Resolve a shape file by relative path or basename under shapes_dir."""
         direct = self.shapes_dir / name
-        if direct.is_file():
+        root = self.shapes_dir.resolve()
+        if direct.is_file() and (direct.resolve() == root or root in direct.resolve().parents):
             return direct
         matches = [
             p

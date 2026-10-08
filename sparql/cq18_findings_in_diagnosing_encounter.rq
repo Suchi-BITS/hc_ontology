@@ -1,0 +1,14 @@
+# CQ18: Which measurements were taken in the same encounter in which a condition was diagnosed? (co-occurrence, not causation)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?patient ?condition ?measure ?value WHERE {
+  ?encounter hc:diagnoses ?dx ;
+             hc:includesObservation ?obs .
+  ?patient hc:hasEncounter ?encounter .
+  ?dx hc:diagnosisName ?condition .
+  ?obs hc:hasCode/hc:codeDisplay ?measure ;
+       hc:observationValue ?value .
+}
+ORDER BY ?patient ?measure

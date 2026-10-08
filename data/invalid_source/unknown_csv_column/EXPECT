@@ -1,0 +1,2 @@
+UNKNOWN_COLUMN
+a column the contract does not know (typo or schema drift)

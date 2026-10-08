@@ -1,12 +1,16 @@
 @prefix hc:  <http://example.org/healthcare-hospital.owl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# Minimal conforming patient fixture (for shape unit tests).
+# Minimal conforming patient fixture (for PatientShape unit tests).
+# Reference data (the gender concept) must be present in the data graph because
+# PersonShape checks sh:class hc:AdministrativeGender.
+hc:GenderFemale a hc:AdministrativeGender .
+
 hc:PatientAlice a hc:Patient ;
     hc:firstName "Alice"^^xsd:string ;
     hc:lastName "Nguyen"^^xsd:string ;
-    hc:gender "female"^^xsd:string ;
-    hc:dateOfBirth "1990-04-12"^^xsd:string ;
+    hc:administrativeGender hc:GenderFemale ;
+    hc:dateOfBirth "1990-04-12"^^xsd:date ;
     hc:bloodGroup "O+"^^xsd:string ;
     hc:hasDiagnosis hc:DxAlice ;
     hc:hasMedicalRecord hc:MRAlice .

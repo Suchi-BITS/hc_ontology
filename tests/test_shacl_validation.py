@@ -10,20 +10,37 @@ from core.shacl_report import ShaclReportFormatter
 
 def test_load_all_shapes_entry_point(project_root):
     graph = load_all_shapes(project_root / "shapes")
-    assert len(graph) > 0
+    from tests.test_patient_shapes import EXPECTED_NODE_SHAPES, node_shape_names
+
+    assert EXPECTED_NODE_SHAPES <= node_shape_names(graph)
 
 
-def test_validate_ontology_runs(validator, project_root):
-    owl = project_root / "healthcare_ontology.owl"
-    if not owl.is_file():
-        pytest.skip("healthcare_ontology.owl not present")
-
+def test_shipped_ontology_conforms_to_its_own_shapes(validator, project_root):
+    """The sample data must satisfy the project's own shapes (PatientJohn used to fail)."""
     result = validator.validate_ontology()
-    assert result.summary.data_source
-    assert isinstance(result.summary.conforms, bool)
-    # Production sample data lacks dateOfBirth → PatientShape Violations expected.
-    # Ensure core hospital/bloodGroup rules are not the only signal of life.
-    assert result.summary.total_violations >= 0
+    violations = [v for v in result.violations if v.severity == "Violation"]
+    assert violations == [], [(v.focus_node, v.message) for v in violations]
+    assert result.summary.conforms is True
+    assert {"clinical_shapes.ttl", "patient_shapes.ttl", "medication_shapes.ttl"} <= set(result.summary.shapes_used)
+
+
+def test_a_broken_patient_is_detected_in_the_real_ontology(validator, project_root):
+    """Guard against the validation silently doing nothing: remove a required field and it must fail."""
+    from rdflib import Graph, XSD
+
+    from core.dataset import Dataset
+
+    graph = Dataset.default().graph()
+    hc = "http://example.org/healthcare-hospital.owl#"
+    from rdflib import URIRef
+
+    graph.remove((URIRef(hc + "PatientJohn"), URIRef(hc + "dateOfBirth"), None))
+    result = validator.validate_graph(graph, data_source="mutated")
+    assert result.summary.conforms is False
+    assert any(
+        v.result_path and v.result_path.endswith("dateOfBirth") and v.severity == "Violation"
+        for v in result.violations
+    )
 
 
 def test_prescription_allergy_conflict(validator, sample_instances_dir):
@@ -32,10 +49,12 @@ def test_prescription_allergy_conflict(validator, sample_instances_dir):
         shape_files=["medication_shapes.ttl", "patient_shapes.ttl"],
     )
     assert result.summary.conforms is False
-    assert any(
-        v.message and "allergic" in v.message.lower() for v in result.violations
-    ) or any(
-        v.source_constraint and "SPARQL" in (v.source_constraint or "")
+    conflicts = [v for v in result.violations
+                 if v.severity == "Violation" and "allergic" in (v.message or "").lower()
+                 and "SPARQLConstraintComponent" in (v.source_constraint or "")]
+    assert len(conflicts) == 1, [(v.severity, v.message) for v in result.violations]
+    assert not any(
+        v.message and "allergic" in v.message.lower() and v.severity != "Violation"
         for v in result.violations
     )
 

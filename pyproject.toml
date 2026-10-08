@@ -1,0 +1,42 @@
+[project]
+name = "healthcare-ontology-platform"
+version = "1.0.0"
+description = "Healthcare ontology (RDF/OWL/SHACL) with a derived Neo4j projection, SPARQL competency questions and an optional LLM layer."
+readme = "readme.md"
+# Evidence: the Dockerfile builds on python:3.11, CI runs 3.11, and the suite was verified on 3.11.8.
+# Newer minor versions are untested; scripts/dev.py warns instead of failing on them.
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+# keep in step with requirements-dev.txt (tests/test_devtools.py checks this)
+dev = ["pytest==8.4.2"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# The application runs from source (uvicorn api:app); it is not a distributable package.
+py-modules = []
+
+[tool.setuptools.dynamic]
+# one list of runtime dependencies: requirements.txt (pinned exactly by constraints.txt)
+dependencies = { file = ["requirements.txt"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: pure logic, no I/O",
+    "ontology: the ontology model and its semantics",
+    "rdf: the RDF artifact and its serialization",
+    "shacl: SHACL shapes, valid and invalid examples",
+    "sparql: competency questions run as SPARQL",
+    "projection: RDF to Neo4j projection logic and writer plan",
+    "api: HTTP boundaries, auth, authorization, input, errors",
+    "integration: components together, in process",
+    "e2e: generator to gate to projection to API",
+    "reasoner: needs Java (OWL reasoner); skipped without it",
+    "live: needs a running Neo4j and RUN_LIVE_NEO4J=1; skipped otherwise (docs/NEO4J_DESKTOP_LIVE_VERIFICATION.md)",
+]

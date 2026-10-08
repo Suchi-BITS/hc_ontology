@@ -1,0 +1,73 @@
+@prefix hc:  <http://example.org/healthcare-hospital.owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# A complete, small clinical record that conforms to ALL shapes (not just one
+# module): patient, practitioner, encounter, diagnosis, observation, code bindings.
+# Reference data is included because shapes check it with sh:class.
+# Schema triples the shapes' RDFS inference needs (the sample ontology file carries them).
+hc:VitalSign rdfs:subClassOf hc:Observation .
+hc:Diagnosis rdfs:subClassOf hc:Condition .
+
+hc:GenderMale a hc:AdministrativeGender .
+hc:SpecialtyCardiology a hc:Specialty .
+hc:EncounterTypeAmbulatory a hc:EncounterType .
+
+hc:CodeI10 a hc:CodeConcept ;
+    hc:codeSystem "http://hl7.org/fhir/sid/icd-10"^^xsd:anyURI ;
+    hc:codeValue "I10"^^xsd:string ;
+    hc:codeDisplay "Essential (primary) hypertension"^^xsd:string .
+
+hc:CodeSbp a hc:CodeConcept ;
+    hc:codeSystem "http://loinc.org"^^xsd:anyURI ;
+    hc:codeValue "8480-6"^^xsd:string ;
+    hc:codeDisplay "Systolic blood pressure"^^xsd:string .
+
+hc:IdLicenseDr a hc:Identifier ;
+    hc:identifierSystem "https://medical-council.example.org/license"^^xsd:anyURI ;
+    hc:identifierValue "DOC1"^^xsd:string ;
+    hc:identifierType "license"^^xsd:string .
+
+hc:Dept a hc:Department .
+
+hc:Dr a hc:Doctor ;
+    hc:firstName "Robert"^^xsd:string ;
+    hc:lastName "Smith"^^xsd:string ;
+    hc:administrativeGender hc:GenderMale ;
+    hc:hasSpecialty hc:SpecialtyCardiology ;
+    hc:hasIdentifier hc:IdLicenseDr ;
+    hc:worksInDepartment hc:Dept ;
+    hc:participatesIn hc:Enc .
+
+hc:Pat a hc:Patient ;
+    hc:firstName "John"^^xsd:string ;
+    hc:lastName "Doe"^^xsd:string ;
+    hc:administrativeGender hc:GenderMale ;
+    hc:dateOfBirth "1985-03-14"^^xsd:date ;
+    hc:bloodGroup "O+"^^xsd:string ;
+    hc:hasMedicalRecord hc:MR ;
+    hc:hasEncounter hc:Enc ;
+    hc:hasDiagnosis hc:Dx ;
+    hc:hasObservation hc:Bp .
+
+hc:MR a hc:MedicalRecord .
+
+hc:Enc a hc:Encounter ;
+    hc:encounterType hc:EncounterTypeAmbulatory ;
+    hc:encounterStart "2026-03-01T09:30:00Z"^^xsd:dateTime ;
+    hc:encounterEnd "2026-03-01T10:00:00Z"^^xsd:dateTime ;
+    hc:diagnoses hc:Dx ;
+    hc:includesObservation hc:Bp .
+
+hc:Dx a hc:Diagnosis ;
+    hc:diagnosisName "Hypertension"^^xsd:string ;
+    hc:hasCode hc:CodeI10 ;
+    hc:diagnosedBy hc:Dr ;
+    hc:clinicalStatus "active"^^xsd:string ;
+    hc:onsetDate "2026-03-01"^^xsd:date .
+
+hc:Bp a hc:VitalSign ;
+    hc:hasCode hc:CodeSbp ;
+    hc:observationValue 152.0 ;
+    hc:observationUnit "mm[Hg]"^^xsd:string ;
+    hc:effectiveDateTime "2026-03-01T09:40:00Z"^^xsd:dateTime .

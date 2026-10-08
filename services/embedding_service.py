@@ -1,18 +1,20 @@
 # embedding_service.py
 # =====================================================
 # PART 1
-# Owlready2 Extraction + Ollama Embeddings +
+# Owlready2 Extraction + OpenAI Embeddings +
 # Neo4j Vector Storage
 # =====================================================
 
 import os
 from typing import List, Dict
 
-import ollama
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 from owlready2 import get_ontology
 
+from core.llm import embed_text
+from core.config import get_settings, require_neo4j_password
+from enterprise.lexical_memory import load_term_aliases, split_name_tokens
 
 load_dotenv()
 
@@ -22,7 +24,7 @@ class EmbeddingService:
     """
     OWL Annotations
             ↓
-    Ollama (nomic-embed-text)
+    OpenAI Embeddings
             ↓
     Embeddings
             ↓
@@ -33,45 +35,26 @@ class EmbeddingService:
     def __init__(
     self,
     ontology_path: str,
-    embedding_model="nomic-embed-text:latest"
+    embedding_model="text-embedding-3-small"
 ):
 
-        self.onto = get_ontology(
-        ontology_path
-    ).load()
+        from core.dataset import as_dataset
+
+        self.onto = as_dataset(ontology_path).load_owlready()
 
         self.embedding_model = embedding_model
 
         self.embedding_model = embedding_model
 
+        from core.config import get_settings
+
+        settings = get_settings()  # the one configuration mechanism (URI, user, database)
         self.driver = GraphDatabase.driver(
-
-            os.getenv(
-
-                "NEO4J_URI",
-
-                "bolt://localhost:7687"
-            ),
-
-            auth=(
-
-                os.getenv(
-                    "NEO4J_USERNAME",
-                    "neo4j"
-                ),
-
-                os.getenv(
-                    "NEO4J_PASSWORD"
-                )
-            )
+            settings["neo4j_uri"],
+            auth=(settings["neo4j_username"], require_neo4j_password()),
         )
 
-        self.database = os.getenv(
-
-            "NEO4J_DATABASE",
-
-            "HC"
-        )
+        self.database = settings["neo4j_database"]
 
     # =================================================
     # EXTRACT EMBEDDABLE CONTENT
@@ -240,6 +223,36 @@ class EmbeddingService:
 
             )
 
+        # Individuals (patients, diagnoses, etc.) — improves vector recall for named entities
+        for ind in self.onto.individuals():
+            node_name = ind.name
+            text_parts = [f"Individual: {node_name}"]
+            try:
+                parents = [p.name for p in ind.is_a if hasattr(p, "name")]
+                if parents:
+                    text_parts.append("Types: " + ", ".join(parents))
+            except Exception:
+                pass
+            for token in sorted(split_name_tokens(node_name)):
+                text_parts.append(f"Alias: {token}")
+            aliases = load_term_aliases()
+            for token in split_name_tokens(node_name):
+                for alias in aliases.get(token, []):
+                    text_parts.append(f"Alias: {alias}")
+            for attr in ("firstName", "lastName", "diagnosisName", "medicationName"):
+                if hasattr(ind, attr):
+                    vals = getattr(ind, attr)
+                    if vals:
+                        text_parts.append(f"{attr}: {vals[0]}")
+
+            documents.append(
+                {
+                    "node_name": node_name,
+                    "node_type": "Individual",
+                    "text": "\n".join(text_parts),
+                }
+            )
+
         return documents
 
     # =================================================
@@ -254,17 +267,7 @@ class EmbeddingService:
 
     ) -> List[float]:
 
-        response = ollama.embeddings(
-
-            model=self.embedding_model,
-
-            prompt=text
-        )
-
-        return response[
-
-            "embedding"
-        ]
+        return embed_text(text)
 
     # =================================================
     # STORE VECTOR
@@ -276,7 +279,9 @@ class EmbeddingService:
 
         node_name: str,
 
-        embedding: List[float]
+        embedding: List[float],
+
+        description: str = ""
 
     ):
 
@@ -303,18 +308,14 @@ class EmbeddingService:
                 )
 
                 SET
-
-                    n.embedding
-
-                    =
-
-                    $embedding
-
+                    n.embedding = $embedding,
+                    n.description = $description
                 """,
 
                 name=node_name,
 
-                embedding=embedding
+                embedding=embedding,
+                description=(description or "")[:4000],
             )
 
     # =================================================
@@ -341,7 +342,9 @@ class EmbeddingService:
 
             document["node_name"],
 
-            embedding
+            embedding,
+
+            document.get("text", "")
         )
 
         return {
@@ -371,19 +374,8 @@ class EmbeddingService:
 
         try:
 
-            response = ollama.embeddings(
-
-                model=self.embedding_model,
-
-                prompt="test"
-            )
-
-            dimensions = len(
-
-                response[
-                    "embedding"
-                ]
-            )
+            vector = embed_text("test")
+            dimensions = len(vector)
 
             return {
 
@@ -438,9 +430,11 @@ class EmbeddingService(EmbeddingService):
 
     VECTOR_INDEX_NAME = "ontology_embeddings"
 
-    VECTOR_DIMENSIONS = 768
-
     VECTOR_SIMILARITY = "cosine"
+
+    @property
+    def vector_dimensions(self) -> int:
+        return int(get_settings().get("embedding_dimensions", 1536))
 
     # =================================================
     # VECTOR INDEX EXISTS
@@ -528,7 +522,7 @@ class EmbeddingService(EmbeddingService):
         ON (n.embedding)
         OPTIONS {{
             indexConfig: {{
-                `vector.dimensions`: {self.VECTOR_DIMENSIONS},
+                `vector.dimensions`: {self.vector_dimensions},
                 `vector.similarity_function`: '{self.VECTOR_SIMILARITY}'
             }}
         }}
@@ -777,7 +771,7 @@ class EmbeddingService(EmbeddingService):
 
                     "vector_dimensions":
 
-                        self.VECTOR_DIMENSIONS,
+                        self.vector_dimensions,
 
                     "total_nodes":
 
@@ -863,7 +857,7 @@ if __name__ == "__main__":
    
     embedding_service = EmbeddingService(
 
-        ontology_path="healthcare_ontology.owl"
+        ontology_path=None
     )
 
     print("\nHealth Check")
@@ -972,7 +966,8 @@ class EmbeddingService(EmbeddingService):
             RETURN
 
                 node.name AS name,
-                score
+                score,
+                coalesce(node.description, '') AS description
 
             ORDER BY
 

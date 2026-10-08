@@ -1,13 +1,21 @@
 @prefix hc:  <http://example.org/healthcare-hospital.owl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+hc:GenderFemale a hc:AdministrativeGender .
+hc:SpecialtyCardiology a hc:Specialty .
+
 hc:DrOk a hc:Doctor ;
     hc:firstName "Ada"^^xsd:string ;
     hc:lastName "Lovelace"^^xsd:string ;
-    hc:gender "female"^^xsd:string ;
-    hc:dateOfBirth "1975-06-01"^^xsd:string ;
-    hc:specialization "Cardiology"^^xsd:string ;
-    hc:doctorLicenseNumber "DOC999"^^xsd:string ;
+    hc:administrativeGender hc:GenderFemale ;
+    hc:dateOfBirth "1975-06-01"^^xsd:date ;
+    hc:hasSpecialty hc:SpecialtyCardiology ;
+    hc:hasIdentifier hc:IdLicenseOk ;
     hc:worksInDepartment hc:Cardio .
+
+hc:IdLicenseOk a hc:Identifier ;
+    hc:identifierSystem "https://medical-council.example.org/license"^^xsd:anyURI ;
+    hc:identifierValue "DOC999"^^xsd:string ;
+    hc:identifierType "license"^^xsd:string .
 
 hc:Cardio a hc:Department .

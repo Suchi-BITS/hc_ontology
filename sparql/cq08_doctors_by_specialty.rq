@@ -1,0 +1,11 @@
+# CQ08: Which doctor has which specialty?
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?doctor ?specialty WHERE {
+  ?doctor a hc:Doctor ;
+          hc:hasSpecialty ?s .
+  ?s rdfs:label ?specialty .
+}
+ORDER BY ?doctor

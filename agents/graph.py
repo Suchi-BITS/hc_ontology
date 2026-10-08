@@ -9,8 +9,10 @@ from typing import Any
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
+from agents.nodes.abstention import abstention_node
 from agents.nodes.execution import execution_node
 from agents.nodes.human_gate import human_gate_node, route_after_human
+from agents.nodes.memory_load import memory_load_node
 from agents.nodes.ontology import ontology_node
 from agents.nodes.planner import planner_node
 from agents.nodes.query import query_node
@@ -26,25 +28,28 @@ def build_agent_graph(*, checkpointer: Any | None = None):
 
     Flow
     ----
-    START → planner → ontology → query → validation
+    START → memory_load → planner → ontology → query → validation
          ↳ (retry) ──────────────┘
-         ↳ human_gate → execution → response → END
-         ↳ respond_failed → END
+         ↳ human_gate → execution → abstention → response → END
+         ↳ respond_failed → abstention → END
          ↳ rejected → END
     """
     graph = StateGraph(AgentState)
 
+    graph.add_node("memory_load", memory_load_node)
     graph.add_node("planner", planner_node)
     graph.add_node("ontology", ontology_node)
     graph.add_node("query", query_node)
     graph.add_node("validation", validation_node)
     graph.add_node("human_gate", human_gate_node)
     graph.add_node("execution", execution_node)
+    graph.add_node("abstention", abstention_node)
     graph.add_node("response", response_node)
     graph.add_node("respond_failed", respond_failed_node)
     graph.add_node("rejected", rejected_node)
 
-    graph.add_edge(START, "planner")
+    graph.add_edge(START, "memory_load")
+    graph.add_edge("memory_load", "planner")
     graph.add_edge("planner", "ontology")
     graph.add_edge("ontology", "query")
     graph.add_edge("query", "validation")
@@ -68,9 +73,10 @@ def build_agent_graph(*, checkpointer: Any | None = None):
         },
     )
 
-    graph.add_edge("execution", "response")
+    graph.add_edge("execution", "abstention")
+    graph.add_edge("abstention", "response")
     graph.add_edge("response", END)
-    graph.add_edge("respond_failed", END)
+    graph.add_edge("respond_failed", "abstention")
     graph.add_edge("rejected", END)
 
     saver = checkpointer if checkpointer is not None else MemorySaver()
@@ -101,7 +107,19 @@ def serialize_state(values: dict[str, Any]) -> dict[str, Any]:
         "ontology_context",
         "retrieved_concepts",
         "hybrid_meta",
+        "retrieval_meta",
         "memory_context",
+        "memory_bundle",
+        "working_context",
+        "working_events",
+        "matched_procedures",
+        "provenance",
+        "refused",
+        "refusal_reason",
+        "confidence",
+        "abstention_threshold",
+        "confidence_signals",
+        "structured_answer",
         "draft_query",
         "validated_query",
         "query_attempts",

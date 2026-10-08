@@ -1,58 +1,78 @@
-version: "3.9"
+# Full stack: Neo4j (derived projection store) + API + Streamlit UI.
+#
+# The REFERENCE, VERIFIED Neo4j for this project is a local Neo4j Desktop database (docs/neo4j-desktop.md). The `neo4j`
+# service below is an optional convenience and has NOT been verified end to end; to use Neo4j Desktop with the API
+# container instead, set NEO4J_URI to an address the container can reach (for example bolt://host.docker.internal:7687).
+#
+# SAFE BY DEFAULT. The API container runs with ENVIRONMENT=production, so it REFUSES TO START without
+# credentials, and open development mode cannot be switched on from this file's variables. Published ports
+# are bound to 127.0.0.1 unless you change API_BIND / NEO4J_BIND / STREAMLIT_BIND on purpose.
+#
+#   python scripts/dev.py setup      # creates .env with a generated NEO4J_PASSWORD
+#   export API_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")   # any strong value
+#   docker compose -f docker_compose.yaml up -d --build
+#   python scripts/dev.py load       # or: docker compose -f docker_compose.yaml run --rm api python scripts/load_graph.py --wait 60 --verify
+#
+# The legacy API_KEY maps to ONE identity: tenant DEFAULT_TENANT_ID, role API_KEY_ROLE (default analyst).
+# For several users and roles, use credentials instead (docs/security-architecture.md).
+#
+# Local development WITHOUT credentials is an explicit, separate command (open admin; loopback only):
+#   docker compose -f docker_compose.yaml -f docker_compose.dev.yaml up -d --build
+#
+# NEO4J_PASSWORD is required (no default). OPENAI_API_KEY is optional: validation, SPARQL, the
+# projection and the Neo4j load all work without it; natural-language queries, embeddings and the
+# agent need it.
+name: healthcare-ontology
 
 services:
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: healthcare-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Optional: docker compose --profile neo4j up
   neo4j:
-    profiles: ["neo4j"]
     image: neo4j:5.26-community
     container_name: healthcare-neo4j
     restart: unless-stopped
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "${NEO4J_BIND:-127.0.0.1}:${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BIND:-127.0.0.1}:${NEO4J_BOLT_PORT:-7687}:7687"
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-neo4j_local}
-      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env (run python scripts/dev.py setup)}"
+      # APOC is not installed (the application does not use it). Beyond that, the server itself refuses
+      # every procedure except the few the application needs, so a query that reaches the database
+      # cannot call anything else even if the application-level checks were bypassed.
+      NEO4J_dbms_security_procedures_allowlist: "db.index.vector.queryNodes,db.labels,db.relationshipTypes,db.propertyKeys"
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
-      interval: 20s
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" \"RETURN 1\" > /dev/null 2>&1 || exit 1"]
+      interval: 10s
       timeout: 10s
-      retries: 10
+      retries: 20
+      start_period: 30s
 
   api:
     build: .
     container_name: healthcare-api
-    restart: unless-stopped
+    # A missing API_KEY makes the container exit with a clear message; do not loop on it forever.
+    restart: on-failure:3
     depends_on:
-      ollama:
+      neo4j:
         condition: service_healthy
     environment:
-      NEO4J_URI: ${NEO4J_URI:-bolt://host.docker.internal:7687}
+      # Fixed on purpose (not read from .env, whose ENVIRONMENT is the *host's* development setting):
+      ENVIRONMENT: production
+      ALLOW_OPEN_DEVELOPMENT_MODE: "false"
+      NEO4J_URI: bolt://neo4j:7687
       NEO4J_USERNAME: neo4j
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_local}
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-hcontology}
-      OLLAMA_HOST: http://ollama:11434
-      OWL_FILE_PATH: healthcare_ontology.owl
-      OLLAMA_MODEL: qwen2.5:latest
-      EMBEDDING_MODEL: nomic-embed-text:latest
-      LOG_LEVEL: INFO
+      NEO4J_PASSWORD: "${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env (run python scripts/dev.py setup)}"
+      NEO4J_DATABASE: neo4j
+      API_KEY: ${API_KEY:-}
+      API_KEY_ROLE: ${API_KEY_ROLE:-analyst}
+      SPARQL_QUERY_TIMEOUT_SECONDS: ${SPARQL_QUERY_TIMEOUT_SECONDS:-15}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}
+      ONTOLOGY_SCHEMA_FILE: ontology/healthcare_schema.ttl
+      SAMPLE_DATA_FILE: data/sample_data.ttl
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-10}
       QUERY_DEFAULT_LIMIT: ${QUERY_DEFAULT_LIMIT:-200}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
@@ -64,11 +84,7 @@ services:
       DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-default}
       COST_BUDGET_USD_PER_DAY: ${COST_BUDGET_USD_PER_DAY:-25}
     ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"
 
   streamlit:
     build: .
@@ -78,10 +94,10 @@ services:
       - api
     environment:
       API_BASE_URL: http://api:8000
+      API_KEY: ${API_KEY:-}
     ports:
-      - "8501:8501"
-    command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+      - "${STREAMLIT_BIND:-127.0.0.1}:${STREAMLIT_PORT:-8501}:8501"
+    command: ["streamlit", "run", "streamlit_app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
 
 volumes:
-  ollama_data:
   neo4j_data:

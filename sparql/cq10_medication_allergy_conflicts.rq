@@ -1,0 +1,11 @@
+# CQ10: Which prescriptions contain a medication the patient is allergic to? (the SHACL safety rule as a query)
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?prescription ?patient ?medication WHERE {
+  ?prescription hc:prescribedFor ?patient ;
+                hc:containsMedication ?medication .
+  ?patient hc:hasAllergy ?allergy .
+  ?allergy hc:allergyToMedication ?medication .
+}

@@ -1,0 +1,390 @@
+{
+  "_comment": "Traceability catalog. One entry per sparql/<id>.rq. docs/competency-questions.md is generated from this file by scripts/build_cq_doc.py; tests/test_sparql_competency.py checks the catalog against the queries, the ontology and the tests.",
+  "questions": [
+    {
+      "id": "cq01_patients",
+      "form": "SELECT",
+      "domain_question": "Who are our patients?",
+      "purpose": "The simplest question a patient registry must answer; it checks that the Patient class is populated and typed.",
+      "concepts": [
+        "Patient"
+      ],
+      "properties": [],
+      "expected": "5 patients: Alice, Bob, David, Emma, John.",
+      "explanation": "A plain type match. It works because every patient is asserted as a Patient; nobody is a bare Person (see CQ14).",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_api_executes_competency_questions"
+      ]
+    },
+    {
+      "id": "cq02_patient_encounters",
+      "form": "SELECT",
+      "domain_question": "What encounters does each patient have, and in what care setting?",
+      "purpose": "Shows how a patient's care history hangs off Encounter, and that the setting is a controlled concept, not a string.",
+      "concepts": [
+        "Encounter"
+      ],
+      "properties": [
+        "hasEncounter",
+        "encounterType"
+      ],
+      "expected": "6 encounters; David has two (Emergency 003, then Inpatient 006), everyone else one Ambulatory.",
+      "explanation": "The setting is read through the SKOS label of the EncounterType concept, so renaming a label changes the answer without touching data.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq03_patient_conditions",
+      "form": "SELECT",
+      "domain_question": "What is each patient diagnosed with?",
+      "purpose": "The core clinical question; it also confirms the one-diagnosis-record-per-patient rule (nobody shares a Diagnosis individual).",
+      "concepts": [
+        "Diagnosis"
+      ],
+      "properties": [
+        "hasDiagnosis",
+        "diagnosisName"
+      ],
+      "expected": "Alice and Bob: Diabetes; David: Migraine; Emma: Influenza; John: Hypertension.",
+      "explanation": "Alice and Bob both show 'Diabetes' but through two separate Diagnosis records; the shared meaning is the code (CQ04), not a shared node.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq04_patients_by_condition_code",
+      "form": "SELECT",
+      "domain_question": "Which patients have a given condition?",
+      "purpose": "Identify a cohort by a standard code instead of a free-text name; the parameterised version of CQ03.",
+      "concepts": [
+        "Diagnosis",
+        "CodeConcept"
+      ],
+      "properties": [
+        "hasDiagnosis",
+        "hasCode",
+        "codeSystem",
+        "codeValue"
+      ],
+      "expected": "ICD-10 E11 gives Alice and Bob; I10 gives John; Z99 gives nobody; SNOMED 44054006 gives Alice and Bob.",
+      "explanation": "?system and ?code are bound by the caller. The same cohort is reachable through ICD-10 or SNOMED because a Diagnosis can carry several codes.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_code_query_is_driven_by_its_parameters"
+      ]
+    },
+    {
+      "id": "cq05_medications_and_categories",
+      "form": "SELECT",
+      "domain_question": "What medications do we know about, and what kind of drug is each?",
+      "purpose": "Checks the medication model that the audit found wrong (Metformin and Insulin as analgesics).",
+      "concepts": [
+        "Medication"
+      ],
+      "properties": [
+        "medicationCategory"
+      ],
+      "expected": "Aspirin has two categories (Analgesic, Antiplatelet); Metformin and Insulin glargine are Antidiabetic; only Aspirin and Paracetamol are Analgesic.",
+      "explanation": "Category is data (a SKOS concept) rather than a subclass, so a drug can have several and the answer is verified against data/reference/drug_classification.csv elsewhere. (tests/test_sample_data.py checks the same categories against the reference.)",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq06_numeric_observations",
+      "form": "SELECT",
+      "domain_question": "Which measurements have been recorded, for whom, and in what unit?",
+      "purpose": "Shows that an Observation is coded (LOINC) and carries a value with a unit.",
+      "concepts": [
+        "Observation"
+      ],
+      "properties": [
+        "hasObservation",
+        "observationValue",
+        "observationUnit",
+        "hasCode",
+        "codeDisplay"
+      ],
+      "expected": "Alice: HbA1c 7.2 %; John: systolic blood pressure 152.0 mm[Hg].",
+      "explanation": "Lab results with only text (the CBC and MRI) have no numeric value and are correctly absent.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq07_encounter_providers",
+      "form": "SELECT",
+      "domain_question": "Which practitioners took part in which encounter?",
+      "purpose": "Care-team membership per encounter, for doctors and nurses alike.",
+      "concepts": [],
+      "properties": [
+        "participatesIn"
+      ],
+      "expected": "9 pairs; Encounter001 has a doctor and a nurse, Encounter003 two doctors.",
+      "explanation": "Only the participatesIn direction is asserted. It is the canonical direction; the inverse is left to a reasoner.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq08_doctors_by_specialty",
+      "form": "SELECT",
+      "domain_question": "Which doctor has which specialty?",
+      "purpose": "Lookup used to route a patient to the right doctor.",
+      "concepts": [
+        "Doctor"
+      ],
+      "properties": [
+        "hasSpecialty"
+      ],
+      "expected": "Smith: Cardiology; John: Neurology; Williams: Surgery; Kumar: Internal medicine.",
+      "explanation": "Nurses have no specialty and are correctly absent: the query is typed to Doctor.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq09_allergies",
+      "form": "SELECT",
+      "domain_question": "Which patients have allergies, and to what?",
+      "purpose": "The safety-critical input to CQ10 and CQ19.",
+      "concepts": [],
+      "properties": [
+        "hasAllergy",
+        "allergyToMedication"
+      ],
+      "expected": "Bob is allergic to Amoxicillin; nobody else.",
+      "explanation": "An Allergy is its own node pointing at a Medication, so a medication allergy can be compared with a prescription by identity.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq10_medication_allergy_conflicts",
+      "form": "SELECT",
+      "domain_question": "Which medication/allergy combinations require attention?",
+      "purpose": "The clinical safety rule written as a plain query, the same rule the SHACL shape enforces.",
+      "concepts": [],
+      "properties": [
+        "prescribedFor",
+        "containsMedication",
+        "hasAllergy",
+        "allergyToMedication"
+      ],
+      "expected": "No rows on the sample data. After adding Amoxicillin to Bob's insulin prescription, exactly that prescription is returned.",
+      "explanation": "An empty answer is only meaningful if the query can be non-empty, so a mutation test inserts a real conflict and watches the query find it.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_conflict_query_finds_a_real_conflict"
+      ]
+    },
+    {
+      "id": "cq11_patients_on_antidiabetics",
+      "form": "SELECT",
+      "domain_question": "Which patients are on diabetes medication?",
+      "purpose": "A cohort defined by drug category, the kind of question that previously went wrong when categories were classes.",
+      "concepts": [
+        "MedCategoryAntidiabetic"
+      ],
+      "properties": [
+        "prescribedFor",
+        "containsMedication",
+        "medicationCategory"
+      ],
+      "expected": "Alice (Metformin) and Bob (Insulin glargine).",
+      "explanation": "Removing Metformin's category from the graph drops Alice from the answer, proving the answer depends on the modelled fact.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_removed_modeling_would_break_the_antidiabetic_query"
+      ]
+    },
+    {
+      "id": "cq12_beds_per_department",
+      "form": "SELECT",
+      "domain_question": "Which beds belong to which department?",
+      "purpose": "Capacity questions need the containment chain department, ward, room, bed.",
+      "concepts": [],
+      "properties": [
+        "containsWard",
+        "containsRoom",
+        "containsBed"
+      ],
+      "expected": "Cardiology: Bed1, Bed2; Neurology: Bed3; ICU: Bed4.",
+      "explanation": "A SPARQL property path (a/b/c) walks three links in one expression.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq13_diagnoses_per_doctor",
+      "form": "SELECT",
+      "domain_question": "How many diagnoses has each doctor made?",
+      "purpose": "Workload reporting; the aggregate-query example.",
+      "concepts": [
+        "Diagnosis"
+      ],
+      "properties": [
+        "diagnosedBy"
+      ],
+      "expected": "Kumar 3, John 1, Smith 1.",
+      "explanation": "GROUP BY with COUNT, ordered by count descending.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_api_executes_competency_questions"
+      ]
+    },
+    {
+      "id": "cq14_all_persons",
+      "form": "SELECT",
+      "domain_question": "Who are all the people in the system, whatever their role?",
+      "purpose": "Shows why the class hierarchy matters: nobody is asserted as Person, yet everybody is one.",
+      "concepts": [
+        "Person"
+      ],
+      "properties": [],
+      "expected": "11 people: 4 doctors, 2 nurses, 5 patients.",
+      "explanation": "The query follows rdfs:subClassOf with a property path. A plain type match returns nothing, which a test demonstrates.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_subclass_path_finds_persons_that_a_plain_type_match_misses",
+        "test_api_accepts_a_valid_property_path_query"
+      ]
+    },
+    {
+      "id": "cq15_unfulfilled_appointments",
+      "form": "SELECT",
+      "domain_question": "Which appointments have not happened yet?",
+      "purpose": "Scheduling follow-up; the negation example.",
+      "concepts": [
+        "Appointment"
+      ],
+      "properties": [
+        "fulfilledBy"
+      ],
+      "expected": "Appointment002 (Emma's neurology follow-up).",
+      "explanation": "FILTER NOT EXISTS: absence of a fulfilling encounter is the information. This is open-world, so it means 'no encounter is recorded', not 'none exists'.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer"
+      ]
+    },
+    {
+      "id": "cq16_encounter_observations",
+      "form": "SELECT",
+      "domain_question": "Which observations belong to a given encounter?",
+      "purpose": "Ties measurements to the visit in which they were taken.",
+      "concepts": [],
+      "properties": [
+        "includesObservation",
+        "hasCode",
+        "codeDisplay",
+        "observationValue",
+        "observationUnit"
+      ],
+      "expected": "Encounter001 includes Observation001 (systolic blood pressure, 152.0 mm[Hg]). No other encounter has observations.",
+      "explanation": "The HbA1c result belongs to Alice but is not linked to Encounter004, so it is correctly absent: the data does not say it was taken there.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_encounter_observations_answer_follows_the_link_not_the_patient"
+      ]
+    },
+    {
+      "id": "cq17_patient_medications",
+      "form": "SELECT",
+      "domain_question": "Which medications are associated with each patient, and who prescribed them?",
+      "purpose": "A medication list per patient; the join goes through Prescription because a patient is not directly linked to a drug.",
+      "concepts": [],
+      "properties": [
+        "prescribedFor",
+        "prescribedBy",
+        "containsMedication"
+      ],
+      "expected": "6 rows: Alice (Metformin), Bob (Insulin glargine), Emma (Amoxicillin, Paracetamol), John (Amlodipine, Aspirin); every row names the prescribing doctor.",
+      "explanation": "Dose is a property of the order, not of the drug, so it is not selected here (see dosageInstruction on Prescription).",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_patient_medications_are_driven_by_prescriptions"
+      ]
+    },
+    {
+      "id": "cq18_findings_in_diagnosing_encounter",
+      "form": "SELECT",
+      "domain_question": "Which observations relate to a particular condition?",
+      "purpose": "The ontology has no 'indicates' relation, so this asks the supportable question: which measurements were taken in the encounter where the condition was diagnosed.",
+      "concepts": [
+        "Encounter",
+        "Diagnosis"
+      ],
+      "properties": [
+        "diagnoses",
+        "includesObservation",
+        "hasEncounter",
+        "diagnosisName",
+        "hasCode",
+        "codeDisplay",
+        "observationValue"
+      ],
+      "expected": "John, Hypertension, Systolic blood pressure, 152.0. Nothing else.",
+      "explanation": "Co-occurrence is not causation. A clinical 'this observation indicates that condition' would need a new, evidence-bearing relation; the competency question deliberately stops at what the model can support.",
+      "tests": [
+        "test_competency_question_returns_the_expected_answer",
+        "test_findings_query_requires_the_shared_encounter"
+      ]
+    },
+    {
+      "id": "cq19_ask_allergy_conflict",
+      "form": "ASK",
+      "domain_question": "Is there any prescription we should stop right now because of an allergy?",
+      "purpose": "A yes/no safety check suitable for a dashboard badge or a pre-release gate.",
+      "concepts": [],
+      "properties": [
+        "prescribedFor",
+        "containsMedication",
+        "hasAllergy",
+        "allergyToMedication"
+      ],
+      "expected": "false on the sample data; true after the conflict is introduced.",
+      "explanation": "ASK returns a boolean. It is the cheapest form of CQ10 when you only need to know whether to look.",
+      "tests": [
+        "test_ask_query_flips_when_a_conflict_exists"
+      ]
+    },
+    {
+      "id": "cq20_construct_patient_summary",
+      "form": "CONSTRUCT",
+      "domain_question": "Give me everything clinically relevant about this patient as a small graph I can hand to another system.",
+      "purpose": "Shows CONSTRUCT as an export: the answer is RDF, not a table.",
+      "concepts": [],
+      "properties": [
+        "hasDiagnosis",
+        "diagnosisName",
+        "prescribedFor",
+        "containsMedication"
+      ],
+      "expected": "For PatientJohn: his diagnosis and its name, and two prescriptions with their medications.",
+      "explanation": "Only the shape in the CONSTRUCT template is returned, so the consumer receives a bounded subgraph rather than the whole graph.",
+      "tests": [
+        "test_construct_returns_a_bounded_patient_subgraph"
+      ]
+    },
+    {
+      "id": "cq21_patients_with_a_condition",
+      "form": "SELECT",
+      "domain_question": "Which patients have a medical condition of any kind?",
+      "purpose": "Demonstrates reasoning: the data says Diagnosis, the question says Condition.",
+      "concepts": [
+        "Condition"
+      ],
+      "properties": [
+        "hasDiagnosis"
+      ],
+      "expected": "On the asserted graph: no rows. With the class hierarchy applied (Diagnosis is a Condition): all 5 patients.",
+      "explanation": "RDF stores what was asserted. The generalisation Diagnosis-is-a-Condition is an ontology fact that must be applied (here the subclass closure; a full reasoner gives the same answer) before the query can see it.",
+      "tests": [
+        "test_condition_query_needs_the_class_hierarchy"
+      ],
+      "requires_entailment": true
+    }
+  ]
+}

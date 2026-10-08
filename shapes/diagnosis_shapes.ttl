@@ -1,7 +1,31 @@
-@prefix sh:   <http://www.w3.org/ns/shacl#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
-@prefix hc:   <http://example.org/healthcare-hospital.owl#> .
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
 @prefix shapes: <http://example.org/healthcare-shapes#> .
+
+# Rules for every clinical Condition (a Diagnosis is a Condition).
+shapes:ConditionShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Condition ;
+    sh:property [
+        sh:path hc:clinicalStatus ;
+        sh:in ( "active"^^xsd:string "recurrence"^^xsd:string "remission"^^xsd:string "resolved"^^xsd:string ) ;
+        sh:maxCount 1 ;
+        sh:message "clinicalStatus must be one of active, recurrence, remission, resolved." ;
+    ] ;
+    sh:property [
+        sh:path hc:onsetDate ;
+        sh:datatype xsd:date ;
+        sh:lessThanOrEquals hc:abatementDate ;
+        sh:message "onsetDate must be an xsd:date on or before abatementDate." ;
+    ] ;
+    # A condition record belongs to exactly one patient. Catches the classic
+    # error of sharing one "Diabetes" individual between several patients.
+    sh:property [
+        sh:path [ sh:inversePath hc:hasCondition ] ;
+        sh:maxCount 1 ;
+        sh:message "A Condition record must belong to at most one patient." ;
+    ] .
 
 shapes:DiagnosisShape
     a sh:NodeShape ;
@@ -13,10 +37,10 @@ shapes:DiagnosisShape
         sh:message "Diagnosis must have a diagnosisName." ;
     ] ;
     sh:property [
-        sh:path hc:diagnosisCode ;
-        sh:datatype xsd:string ;
+        sh:path hc:hasCode ;
+        sh:class hc:CodeConcept ;
         sh:minCount 1 ;
-        sh:message "Diagnosis must have a diagnosisCode." ;
+        sh:message "Diagnosis must be bound to a CodeConcept via hasCode." ;
     ] ;
     sh:property [
         sh:path hc:diagnosedBy ;
@@ -25,9 +49,8 @@ shapes:DiagnosisShape
         sh:message "Diagnosis must be linked to a doctor via diagnosedBy." ;
     ] ;
     sh:property [
-        sh:path hc:diagnosisForPatient ;
-        sh:class hc:Patient ;
+        sh:path [ sh:inversePath hc:hasDiagnosis ] ;
         sh:minCount 1 ;
         sh:severity sh:Warning ;
-        sh:message "Diagnosis should reference the diagnosed patient." ;
+        sh:message "Diagnosis should be attached to a patient (hasDiagnosis)." ;
     ] .

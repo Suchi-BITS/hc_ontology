@@ -12,6 +12,10 @@ def setup_logging():
         level=level,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
+        force=True,
     )
+
+    memory_log = logging.getLogger("healthcare_ontology.agent.memory")
+    memory_log.setLevel(level)
 
     return logging.getLogger("healthcare_ontology")

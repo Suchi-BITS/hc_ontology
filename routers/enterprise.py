@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 
 from core.job_store import job_store
 from enterprise.cost import cost_tracker
-from enterprise.evaluation import DEFAULT_CASES, push_to_langsmith, run_evaluation
+from enterprise.evaluation import DEFAULT_CASES, push_to_langsmith, run_evaluation, run_governance_eval
 from enterprise.guardrails import check_input
-from enterprise.hybrid_retrieval import hybrid_retrieve
+from enterprise.retrieval_pipeline import retrieve_with_rerank
 from enterprise.monitoring import monitor
 from enterprise.observability import configure_observability, langsmith_run_url
 from enterprise.ontology_registry import ontology_registry
@@ -80,7 +80,13 @@ def enterprise_health():
 
 
 @router.get("/tenants")
-def list_tenants(_: Principal = Depends(require_permission(Permission.ONTOLOGY_READ))):
+def list_tenants(principal: Principal = Depends(require_permission(Permission.ONTOLOGY_READ))):
+    """A tenant sees only itself; the cross-tenant catalog needs the platform:admin permission."""
+    visible = (
+        tenant_registry.list()
+        if principal.has(Permission.PLATFORM_ADMIN)
+        else [t for t in tenant_registry.list() if t.tenant_id == principal.tenant_id]
+    )
     return {
         "tenants": [
             {
@@ -90,7 +96,7 @@ def list_tenants(_: Principal = Depends(require_permission(Permission.ONTOLOGY_R
                 "neo4j_database": t.neo4j_database,
                 "active": t.active,
             }
-            for t in tenant_registry.list()
+            for t in visible
         ]
     }
 
@@ -98,7 +104,7 @@ def list_tenants(_: Principal = Depends(require_permission(Permission.ONTOLOGY_R
 @router.post("/tenants")
 def create_tenant(
     body: TenantCreate,
-    _: Principal = Depends(require_permission(Permission.ADMIN)),
+    _: Principal = Depends(require_permission(Permission.PLATFORM_ADMIN)),
 ):
     tenant = TenantContext(
         tenant_id=body.tenant_id,
@@ -121,23 +127,31 @@ def list_ontologies(
     }
 
 
+def _owned_ontology(ontology_id: str, tenant: TenantContext):
+    """The ontology, only if the caller's tenant owns it. Someone else's looks like a missing one."""
+    rec = ontology_registry.get(ontology_id)
+    if not rec or tenant.tenant_id not in rec.tenant_ids:
+        raise HTTPException(status_code=404, detail="Ontology not found")
+    return rec
+
+
 @router.get("/ontologies/{ontology_id}")
 def get_ontology(
     ontology_id: str,
+    tenant: TenantContext = Depends(require_tenant),
     _: Principal = Depends(require_permission(Permission.ONTOLOGY_READ)),
 ):
-    rec = ontology_registry.get(ontology_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Ontology not found")
-    return rec.to_dict()
+    return _owned_ontology(ontology_id, tenant).to_dict()
 
 
 @router.post("/ontologies/{ontology_id}/versions")
 def publish_ontology_version(
     ontology_id: str,
     body: OntologyVersionPublish,
+    tenant: TenantContext = Depends(require_tenant),
     _: Principal = Depends(require_permission(Permission.ONTOLOGY_WRITE)),
 ):
+    _owned_ontology(ontology_id, tenant)
     try:
         rec = ontology_registry.publish_version(
             ontology_id,
@@ -158,8 +172,10 @@ def publish_ontology_version(
 def activate_ontology_version(
     ontology_id: str,
     version: str,
+    tenant: TenantContext = Depends(require_tenant),
     _: Principal = Depends(require_permission(Permission.ONTOLOGY_WRITE)),
 ):
+    _owned_ontology(ontology_id, tenant)
     try:
         return ontology_registry.set_active(ontology_id, version).to_dict()
     except KeyError as exc:
@@ -174,7 +190,7 @@ def hybrid_search(
 ):
     started = time.perf_counter()
     try:
-        result = hybrid_retrieve(body.query, top_k=body.top_k)
+        result = retrieve_with_rerank(body.query, pool_size=16, top_k=body.top_k)
         cost_tracker.record(tenant.tenant_id, "embedding_call", units=1, meta={"hybrid": True})
         return {"tenant_id": tenant.tenant_id, **result}
     finally:
@@ -225,7 +241,7 @@ def run_workflow(
     _: Principal = Depends(require_permission(Permission.WORKFLOW_RUN)),
 ):
     params = dict(body.params)
-    params.setdefault("tenant_id", tenant.tenant_id)
+    params["tenant_id"] = tenant.tenant_id  # never taken from the request body
     try:
         job_id = enqueue_workflow(body.name, **params)
     except KeyError as exc:
@@ -256,6 +272,61 @@ def eval_run(_: Principal = Depends(require_permission(Permission.AGENT_EVAL))):
     return run_evaluation(runner, DEFAULT_CASES)
 
 
+@router.post("/eval/governance")
+def eval_governance(
+    split: str = "test",
+    _: Principal = Depends(require_permission(Permission.AGENT_EVAL)),
+):
+    """Run governance eval: retrieval error budget + provenance + abstention metrics."""
+    from agents.nodes.planner import _heuristic_plan
+    from enterprise.abstention import decide_abstention
+    from enterprise.guardrails import check_input
+    from enterprise.provenance import build_provenance
+    from enterprise.retrieval_pipeline import retrieve_with_rerank
+
+    def runner(case: EvalCase):
+        g = check_input(case.question)
+        if not g.allowed:
+            state = {
+                "question": case.question,
+                "blocked": True,
+                "status": "failed",
+                "refused": True,
+                "refusal_reason": "guardrail",
+            }
+            state["provenance"] = build_provenance(state)
+            return state
+
+        plan = _heuristic_plan(case.question)
+        pipeline = retrieve_with_rerank(case.question, pool_size=16, top_k=8)
+        state = {
+            "question": case.question,
+            "status": "completed",
+            "query_type": plan["query_type"],
+            "answer": plan.get("reasoning", ""),
+            "validated_query": "",
+            "results": [],
+            "retrieved_concepts": pipeline.get("results") or [],
+            "retrieval_meta": {
+                "error_budget": pipeline.get("error_budget"),
+                "channels": pipeline.get("channels"),
+            },
+            "validation_ok": True,
+        }
+        abst = decide_abstention(state)
+        state.update(
+            {
+                "refused": abst["refused"],
+                "refusal_reason": abst.get("refusal_reason"),
+                "confidence": abst.get("confidence"),
+                "provenance": abst.get("provenance"),
+            }
+        )
+        return state
+
+    return run_governance_eval(runner, split=split)
+
+
 @router.post("/eval/langsmith-dataset")
 def eval_langsmith_dataset(
     name: str = "healthcare-agent-eval",
@@ -265,8 +336,8 @@ def eval_langsmith_dataset(
 
 
 @router.get("/jobs/{job_id}")
-def enterprise_job(job_id: str, _: Principal = Depends(require_permission(Permission.WORKFLOW_RUN))):
-    rec = job_store.get(job_id)
+def enterprise_job(job_id: str, principal: Principal = Depends(require_permission(Permission.WORKFLOW_RUN))):
+    rec = job_store.get_for_tenant(job_id, principal.tenant_id)
     if not rec:
         raise HTTPException(status_code=404, detail="Job not found")
     return rec.to_dict()

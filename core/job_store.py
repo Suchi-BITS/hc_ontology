@@ -20,6 +20,7 @@ class JobRecord:
     result: Any | None = None
     error: str | None = None
     meta: dict[str, Any] = field(default_factory=dict)
+    tenant_id: str = ""  # owner: only this tenant may read the job
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -34,7 +35,7 @@ class JobStore:
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
-    def submit(self, kind: str, fn: Callable[[], Any], meta: dict | None = None) -> str:
+    def submit(self, kind: str, fn: Callable[[], Any], meta: dict | None = None, tenant_id: str = "") -> str:
         job_id = uuid.uuid4().hex
         now = self._now()
         record = JobRecord(
@@ -44,6 +45,7 @@ class JobStore:
             created_at=now,
             updated_at=now,
             meta=meta or {},
+            tenant_id=tenant_id,
         )
         with self._lock:
             self._jobs[job_id] = record
@@ -73,6 +75,11 @@ class JobStore:
     def get(self, job_id: str) -> JobRecord | None:
         with self._lock:
             return self._jobs.get(job_id)
+
+    def get_for_tenant(self, job_id: str, tenant_id: str) -> JobRecord | None:
+        """The job, only if it belongs to ``tenant_id``. Another tenant's job looks like a missing one."""
+        job = self.get(job_id)
+        return job if job is not None and job.tenant_id == tenant_id else None
 
 
 job_store = JobStore()

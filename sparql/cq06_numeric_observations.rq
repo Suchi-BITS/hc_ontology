@@ -1,0 +1,13 @@
+# CQ06: Which numeric observations exist, for whom, what do they measure, and in which unit?
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?patient ?measure ?value ?unit WHERE {
+  ?patient hc:hasObservation ?obs .
+  ?obs hc:observationValue ?value ;
+       hc:observationUnit  ?unit ;
+       hc:hasCode ?code .
+  ?code hc:codeDisplay ?measure .
+}
+ORDER BY ?patient

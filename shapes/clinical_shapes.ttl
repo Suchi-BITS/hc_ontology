@@ -1,0 +1,152 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix hc:     <http://example.org/healthcare-hospital.owl#> .
+@prefix shapes: <http://example.org/healthcare-shapes#> .
+
+# Encounters, observations, and the identifier / code-binding patterns.
+# Instants (xsd:dateTime) MUST carry a time zone offset: an instant without
+# one is ambiguous. SHACL checks the lexical form with sh:pattern (full ISO 8601 shape:
+# rdflib accepts some malformed forms, such as a space instead of 'T', as valid dateTime).
+
+shapes:EncounterShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Encounter ;
+    sh:property [
+        sh:path [ sh:inversePath hc:hasEncounter ] ;
+        sh:class hc:Patient ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "An Encounter must belong to exactly one patient (hasEncounter)." ;
+    ] ;
+    sh:property [
+        sh:path hc:encounterType ;
+        sh:class hc:EncounterType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "An Encounter must have exactly one encounterType." ;
+    ] ;
+    sh:property [
+        sh:path hc:encounterStart ;
+        sh:datatype xsd:dateTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:pattern "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" ;
+        sh:lessThanOrEquals hc:encounterEnd ;
+        sh:message "encounterStart must be a single xsd:dateTime with a time zone, not after encounterEnd." ;
+    ] ;
+    sh:property [
+        sh:path hc:encounterEnd ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" ;
+        sh:message "encounterEnd must be an xsd:dateTime with a time zone." ;
+    ] ;
+    sh:property [
+        sh:path [ sh:inversePath hc:participatesIn ] ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "An Encounter should have at least one participating practitioner." ;
+    ] .
+
+shapes:ObservationShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Observation ;
+    sh:property [
+        sh:path [ sh:inversePath hc:hasObservation ] ;
+        sh:class hc:Patient ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "An Observation must be about exactly one patient (hasObservation)." ;
+    ] ;
+    sh:property [
+        sh:path hc:effectiveDateTime ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" ;
+        sh:message "effectiveDateTime must be an xsd:dateTime with a time zone." ;
+    ] ;
+    sh:property [
+        sh:path hc:observationValue ;
+        sh:datatype xsd:decimal ;
+        sh:maxCount 1 ;
+        sh:message "observationValue must be a single xsd:decimal." ;
+    ] ;
+    sh:property [
+        sh:path hc:hasCode ;
+        sh:class hc:CodeConcept ;
+        sh:minCount 1 ;
+        sh:severity sh:Info ;
+        sh:message "Prefer binding an Observation to a CodeConcept (for example LOINC) via hasCode." ;
+    ] ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "A numeric observationValue requires an observationUnit." ;
+        sh:select """
+            PREFIX hc: <http://example.org/healthcare-hospital.owl#>
+            SELECT $this WHERE {
+                $this hc:observationValue ?v .
+                FILTER NOT EXISTS { $this hc:observationUnit ?u }
+            }
+        """ ;
+    ] .
+
+# CLOSED: a CodeConcept is a small value object (system + code + display). It is not an extension point, and a
+# misspelt property here (codeValu) would otherwise be silently ignored. See docs/ontology-engineering.md,
+# "Open and closed shapes".
+shapes:CodeConceptShape
+    a sh:NodeShape ;
+    sh:targetClass hc:CodeConcept ;
+    sh:closed true ;
+    sh:ignoredProperties ( <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ) ;
+    sh:property [
+        sh:path hc:codeSystem ;
+        sh:datatype xsd:anyURI ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "A CodeConcept must name its codeSystem (xsd:anyURI)." ;
+    ] ;
+    sh:property [
+        sh:path hc:codeValue ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "A CodeConcept must have a single codeValue." ;
+    ] ;
+    sh:property [
+        sh:path hc:codeDisplay ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "A CodeConcept should carry a codeDisplay." ;
+    ] .
+
+# CLOSED for the same reason as CodeConceptShape: system + value + type (+ assigner) is the whole pattern.
+shapes:IdentifierShape
+    a sh:NodeShape ;
+    sh:targetClass hc:Identifier ;
+    sh:closed true ;
+    sh:ignoredProperties ( <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ) ;
+    sh:property [
+        sh:path hc:identifierSystem ;
+        sh:datatype xsd:anyURI ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "An Identifier must name its issuing system (xsd:anyURI)." ;
+    ] ;
+    sh:property [
+        sh:path hc:identifierValue ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "An Identifier must have a single identifierValue." ;
+    ] ;
+    sh:property [
+        sh:path hc:identifierType ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "An Identifier should state its identifierType." ;
+    ] ;
+    sh:property [
+        sh:path hc:identifierAssigner ;
+        sh:maxCount 1 ;
+        sh:message "An Identifier has at most one assigning organization." ;
+    ] .

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from core.dependencies import get_embedding_service, get_ontology, get_sparql_to_cypher
+from enterprise.lexical_memory import expand_tokens, extract_tokens, overlap_score, split_name_tokens
 
 logger = logging.getLogger("healthcare_ontology.enterprise")
+
+_TOKEN = re.compile(r"[a-z0-9]+", re.I)
 
 
 def _normalize_vector_hits(raw: list[Any]) -> list[dict[str, Any]]:
@@ -32,8 +36,10 @@ def _normalize_vector_hits(raw: list[Any]) -> list[dict[str, Any]]:
 
 def _graph_keyword_hits(question: str, limit: int = 8) -> list[dict[str, Any]]:
     """Keyword / schema graph retrieval via ontology class/individual names."""
-    q = question.lower()
-    tokens = [t for t in q.replace("?", " ").replace(",", " ").split() if len(t) > 2]
+    tokens = extract_tokens(question)
+    expanded = expand_tokens(tokens)
+    if not expanded:
+        return []
     hits: list[dict[str, Any]] = []
     try:
         onto = get_ontology()
@@ -41,12 +47,16 @@ def _graph_keyword_hits(question: str, limit: int = 8) -> list[dict[str, Any]]:
         individuals = onto.get_individuals() if hasattr(onto, "get_individuals") else []
         for name in list(classes) + list(individuals):
             nl = name.lower()
-            score = sum(1.0 for t in tokens if t in nl)
+            name_tokens = split_name_tokens(name)
+            score = overlap_score(tokens, name)
+            # Extra boost when expanded alias token appears in entity name
+            if any(t in nl or t in name_tokens for t in expanded):
+                score = max(score, overlap_score(expanded, name))
             if score > 0:
                 hits.append(
                     {
                         "name": name,
-                        "score": score / max(len(tokens), 1),
+                        "score": round(min(1.0, score), 4),
                         "source": "graph",
                         "description": f"Ontology entity match: {name}",
                     }
@@ -136,7 +146,12 @@ def hybrid_retrieve(question: str, top_k: int = 8) -> dict[str, Any]:
     fused = []
     for name, rrf in ranked:
         item = dict(meta.get(name) or {"name": name})
+        channel = float(item.get("score") or 0.0)
         item["rrf_score"] = round(rrf, 6)
+        item["channel_score"] = round(channel, 6)
+        # Preserve strongest channel signal for downstream rerank/abstention
+        if channel <= 0 and rrf > 0:
+            item["score"] = round(rrf, 6)
         fused.append(item)
 
     return {

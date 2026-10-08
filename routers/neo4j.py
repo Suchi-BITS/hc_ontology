@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core.auth import verify_api_key
+from core.authz import Permission, require_permission
+from core.security import request_identity
 from core.config import get_settings
 from core.cypher_validator import CypherQueryValidator
 from core.dependencies import (
@@ -15,8 +17,12 @@ from core.metrics import metrics
 from core.rate_limit import SlidingWindowRateLimiter, client_key
 from core.schemas import ExecuteCypherRequest, NLQueryRequest, SparqlCypherRequest
 from core.sparql_validator import SparqlQueryValidator
+from services.graph_projection import ProjectionError, to_cypher_script
 
-router = APIRouter(tags=["Neo4j"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(
+    tags=["Neo4j"],
+    dependencies=[Depends(verify_api_key), Depends(require_permission(Permission.QUERY_EXECUTE))],
+)
 
 _llm_limiter: SlidingWindowRateLimiter | None = None
 
@@ -53,16 +59,48 @@ def _cypher_validator(explain: bool = True) -> CypherQueryValidator:
     )
 
 
+def _projection_error(exc: ProjectionError) -> HTTPException:
+    return HTTPException(
+        status_code=422,
+        detail={"message": str(exc), "problems": exc.problems},
+    )
+
+
+@router.get("/neo4j/projection")
+def neo4j_projection_preview():
+    """What would be loaded: counts, fingerprint and anything not projected. Touches no database.
+
+    RDF/OWL/SHACL is the authority; Neo4j is a derived projection of it. The RDF is
+    SHACL-validated first; invalid RDF is rejected with 422.
+    """
+    try:
+        return {"authority": "ontology/healthcare_schema.ttl + data/sample_data.ttl + shapes/", **get_neo4j_exporter().plan().summary()}
+    except ProjectionError as e:
+        raise _projection_error(e) from e
+
+
 @router.get("/neo4j/export")
 def neo4j_export():
-    return {"cypher": get_ontology().export_neo4j_cypher()}
-
-
-@router.post("/neo4j/load")
-def neo4j_load():
-    """Load OWL individuals, properties, and relationships into Neo4j."""
+    """The projection rendered as idempotent Cypher MERGE statements (for inspection)."""
     try:
-        return get_neo4j_exporter().export()
+        projection = get_neo4j_exporter().plan()
+        return {"fingerprint": projection.fingerprint(), "cypher": to_cypher_script(projection)}
+    except ProjectionError as e:
+        raise _projection_error(e) from e
+
+
+@router.post("/neo4j/load", dependencies=[Depends(require_permission(Permission.GRAPH_WRITE))])
+def neo4j_load():
+    """Synchronize the Neo4j projection from the authoritative RDF.
+
+    Deterministic and idempotent. Scoped to the projection labels (Resource,
+    OntologyClass, ProjectionMeta): agent memory, documents and embeddings are never
+    touched. There is no endpoint that clears the database.
+    """
+    try:
+        return get_neo4j_exporter().sync()
+    except ProjectionError as e:
+        raise _projection_error(e) from e
     except Exception as e:
         raise map_query_exception(e) from e
 
@@ -115,6 +153,13 @@ def sparql_to_cypher(request: SparqlCypherRequest):
 def nl_to_cypher(request: NLQueryRequest, http_request: Request):
     _limiter().check(client_key(http_request))
     try:
+        from agents.memory.preview import run_memory_debug_preview
+
+        run_memory_debug_preview(
+            request.question,
+            session_id=request.session_id or "",
+            source="nl-to-cypher",
+        )
         return get_cypher_generator().generate_and_validate(request.question)
     except Exception as e:
         raise map_query_exception(e) from e
@@ -131,6 +176,7 @@ def nl_to_cypher_async(request: NLQueryRequest, http_request: Request):
         "nl-to-cypher",
         lambda: gen.generate_and_validate(request.question),
         meta={"question": request.question},
+        tenant_id=request_identity(http_request).tenant_id,
     )
     return {"job_id": job_id, "status_url": f"/jobs/{job_id}"}
 

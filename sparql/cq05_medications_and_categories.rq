@@ -1,0 +1,11 @@
+# CQ05: Which medications exist and what therapeutic categories do they have?
+PREFIX hc:   <http://example.org/healthcare-hospital.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?medication ?category WHERE {
+  ?medication a hc:Medication ;
+              hc:medicationCategory ?c .
+  ?c rdfs:label ?category .
+}
+ORDER BY ?medication ?category

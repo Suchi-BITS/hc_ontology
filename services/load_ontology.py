@@ -1,32 +1,54 @@
-import ollama
-from owlready2 import *
 import os
 
-#from asyncio import graph
-from neo4j import GraphDatabase
-from rdflib import Graph
+from rdflib import XSD, Graph, Literal
+
+from core.dataset import as_dataset
 
 class HealthcareOntology:
 
-    def __init__(
-        self,
-        owl_file="healthcare_ontology.owl"
-    ):
+    def __init__(self, owl_file=None):
+        """owl_file: a Dataset (schema + sample data), a path to one RDF file, or None for the configured dataset.
+        (The name is historical; the object model is built from the merged graph, whatever files it came from.)"""
+        self.dataset = as_dataset(owl_file)
+        self.owl_file = self.dataset  # what the SPARQL workers and the exporter are given
 
-        self.owl_file = owl_file
+        self.onto = self.dataset.load_owlready()
 
-        self.onto = get_ontology(
-            os.path.abspath(owl_file)
-        ).load()
+    @staticmethod
+    def _scalar(value):
+        """First value of a property as a string; handles functional (scalar) and list values."""
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else None
+        return "" if value is None else str(value)
+
+    @staticmethod
+    def _as_list(value):
+        """Owlready2 returns a scalar for functional properties and a list otherwise."""
+        if value is None:
+            return []
+        return list(value) if isinstance(value, (list, tuple)) else [value]
+
+    @staticmethod
+    def _preferred_code(entity):
+        """codeValue of the ICD-10 coding if present, else the first coding, else empty."""
+        codes = list(getattr(entity, "hasCode", []) or [])
+        icd = [c for c in codes if (c.codeSystem or "").endswith("icd-10")]
+        chosen = (icd or codes or [None])[0]
+        return (chosen.codeValue if chosen is not None else "") or ""
+
+    @staticmethod
+    def _concept_label(concept):
+        """Display label of a SKOS-style vocabulary individual."""
+        return concept.label.first() or concept.name
 
     # ==========================================
     # SAVE
     # ==========================================
 
     def save(self):
-
-        self.onto.save(
-            file=self.owl_file
+        raise NotImplementedError(
+            "The ontology is generated, not edited at runtime: regenerate ontology/healthcare_schema.ttl and "
+            "data/sample_data.ttl with scripts/generate_hc_ontology.py and scripts/generate_sample_data.py."
         )
 
     # ==========================================
@@ -99,14 +121,11 @@ class HealthcareOntology:
             results.append({
                 "name": p.name,
                 "first_name":
-                    p.firstName[0]
-                    if p.firstName else "",
+                    self._scalar(p.firstName),
                 "last_name":
-                    p.lastName[0]
-                    if p.lastName else "",
+                    self._scalar(p.lastName),
                 "blood_group":
-                    p.bloodGroup[0]
-                    if p.bloodGroup else ""
+                    self._scalar(p.bloodGroup)
             })
 
         return results
@@ -126,8 +145,8 @@ class HealthcareOntology:
             results.append({
                 "name": d.name,
                 "specialization":
-                    d.specialization[0]
-                    if d.specialization else ""
+                    self._concept_label(d.hasSpecialty[0])
+                    if d.hasSpecialty else ""
             })
 
         return results
@@ -150,7 +169,7 @@ class HealthcareOntology:
 
             if appt.appointmentForPatient:
                 patient = \
-                    appt.appointmentForPatient[0].name
+                    self._as_list(appt.appointmentForPatient)[0].name
 
             if appt.appointmentWithDoctor:
                 doctor = \
@@ -248,22 +267,10 @@ class HealthcareOntology:
                     diagnosis.name,
 
                 "diagnosis_code":
-                    diagnosis.diagnosisCode[0]
-                    if hasattr(
-                        diagnosis,
-                        "diagnosisCode"
-                    )
-                    and diagnosis.diagnosisCode
-                    else "",
+                    self._preferred_code(diagnosis),
 
                 "diagnosis_title":
-                    diagnosis.diagnosisName[0]
-                    if hasattr(
-                        diagnosis,
-                        "diagnosisName"
-                    )
-                    and diagnosis.diagnosisName
-                    else ""
+                    self._scalar(diagnosis.diagnosisName)
             })
 
         return {
@@ -342,7 +349,7 @@ class HealthcareOntology:
 
             if doctor in diagnosis.diagnosedBy:
 
-                for patient in diagnosis.diagnosisForPatient:
+                for patient in self._as_list(diagnosis.diagnosisForPatient):
 
                     patients.append({
 
@@ -397,30 +404,19 @@ class HealthcareOntology:
 
         return triples
     
-    def execute_sparql(
-    self,
-    query: str):
+    def execute_sparql(self, query: str):
+        """Run a SELECT query with a HARD time limit (SPARQL_QUERY_TIMEOUT_SECONDS).
 
-        graph = Graph()
+        Execution happens in a killable worker process (core/sparql_exec.py): rdflib cannot be interrupted
+        in-process, so the limit is enforced by terminating the worker. Raises SparqlTimeout (a TimeoutError).
+        """
+        from core.config import get_settings
+        from core.sparql_exec import get_runner
 
-        graph.parse(
-        self.owl_file,
-        format="xml"
-    )
+        settings = get_settings()
+        runner = get_runner(self.dataset, settings["sparql_workers"])
+        return runner.run(query, settings["sparql_query_timeout_seconds"])
 
-        rows = graph.query(query)
-
-        output = []
-
-        for row in rows:
-
-            output.append([
-            str(x)
-            for x in row
-        ])
-
-        return output
-    
     def natural_language_query(
     self,
     question: str
@@ -439,7 +435,7 @@ class HealthcareOntology:
 
             if "hypertension" in d.name.lower():
 
-                for p in d.diagnosisForPatient:
+                for p in self._as_list(d.diagnosisForPatient):
 
                     results.append(
                         p.name
@@ -461,55 +457,6 @@ class HealthcareOntology:
             "No rule matched."
     }
 
-    def export_neo4j_cypher(
-    self
-):
-
-        statements = []
-
-    # Nodes
-
-        for individual in self.onto.individuals():
-
-            cls = individual.is_a[0].name
-
-            statements.append(
-
-            f"""
-            MERGE (n:{cls}
-            {{name:'{individual.name}'}})
-            """
-        )
-
-    # Relationships
-
-        for subject in self.onto.individuals():
-
-            for prop in subject.get_properties():
-
-                try:
-
-                    for obj in prop[subject]:
-
-                        if hasattr(
-                        obj,
-                        "name"
-                    ):
-
-                            statements.append(
-
-                            f"""
-                            MATCH (a {{name:'{subject.name}'}})
-                            MATCH (b {{name:'{obj.name}'}})
-                            MERGE (a)-[:{prop.name.upper()}]->(b)
-                            """
-                        )
-
-                except:
-                    pass
-
-        return statements
-    
 # from openai import OpenAI
 # import os
 
@@ -551,31 +498,23 @@ Return query only.
     def generate_sparql(
         self,
         question: str,
-        model: str = "llama3:latest"
+        model: str | None = None,
     ):
+        # The LLM stack is imported only when natural language is actually used: the ontology service
+        # (parse, describe, SPARQL) must work without openai or langchain installed.
+        from core.config import get_settings
+        from core.llm import get_chat_llm
 
-        response = ollama.chat(
+        from langchain_core.messages import HumanMessage, SystemMessage
 
-            model=model,
-
-            messages=[
-
-                {
-                    "role": "system",
-
-                    "content":
-
-                        self.ontology_schema_prompt()
-                },
-
-                {
-                    "role": "user",
-
-                    "content":
-
-                        question
-                }
+        llm = get_chat_llm(
+            model=model or get_settings()["llm_model"],
+            temperature=0,
+        )
+        response = llm.invoke(
+            [
+                SystemMessage(content=self.ontology_schema_prompt()),
+                HumanMessage(content=question),
             ]
         )
-
-        return response["message"]["content"]
+        return getattr(response, "content", str(response))

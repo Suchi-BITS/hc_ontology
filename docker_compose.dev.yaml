@@ -1,0 +1,13 @@
+# EXPLICIT local-development override: authentication OFF, every request is an admin "local-developer".
+#
+#   docker compose -f docker_compose.yaml -f docker_compose.dev.yaml up -d --build
+#
+# Use it only on your own machine. The published ports stay bound to 127.0.0.1 (set in docker_compose.yaml)
+# so the open API is reachable from this computer only. Do NOT set API_BIND=0.0.0.0 together with this file.
+# Without this file the API container is production-mode and refuses to start without credentials.
+services:
+  api:
+    environment:
+      ENVIRONMENT: development
+      ALLOW_OPEN_DEVELOPMENT_MODE: "true"
+    restart: "no"

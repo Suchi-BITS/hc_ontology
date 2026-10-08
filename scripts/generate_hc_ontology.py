@@ -1,1568 +1,537 @@
 """
-Healthcare Hospital Ontology Generator
-======================================
+Healthcare Hospital Ontology generator (v2)
+===========================================
 
-Generates:
-    healthcare_hospital_ontology.owl
+Single source of truth for ``ontology/healthcare_schema.ttl``: the SCHEMA only (TBox plus controlled
+vocabularies). Synthetic instance data is a separate artifact, built by ``scripts/generate_sample_data.py``.
 
-Install:
-    pip install owlready2
+    python scripts/generate_hc_ontology.py
 
-Run:
-    python healthcare_hospital_ontology.py
+The design rationale is in ``docs/ontology-engineering.md``. In short:
 
-Import output OWL into Protege.
+* OWL carries *meaning* (class hierarchy, property characteristics, inverses,
+  disjointness, a few defined classes).  It does NOT carry "required field"
+  rules - under the open-world assumption a cardinality restriction does not
+  validate anything.  Those rules live in ``shapes/*.ttl`` (SHACL).
+* Controlled vocabularies (specialty, administrative gender, encounter type,
+  medication category) are SKOS concepts, typed by a small OWL class so that
+  domains/ranges stay precise.
+* External terminologies are never copied in.  A ``CodeConcept``
+  (codeSystem + codeValue + codeDisplay) is the binding pattern.
+* Asserted relationship direction: inverse properties are declared, but the
+  sample data asserts one canonical direction only (Owlready2 stores a single
+  triple); the other direction is inferred by a reasoner.
 """
+import datetime
+import os
+import re
+import sys
+import types
+
 from owlready2 import (
-    get_ontology,
-    Thing,
-    ObjectProperty,
+    AllDisjoint,
+    AnnotationProperty,
     DataProperty,
     FunctionalProperty,
-    SymmetricProperty,
+    ObjectProperty,
+    Or,
+    Thing,
     TransitiveProperty,
-    InverseFunctionalProperty,
-    AllDisjoint,
-    sync_reasoner_pellet
+    declare_datatype,
+    get_ontology,
+    locstr,
 )
 
-import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
-onto = get_ontology(
-    "http://example.org/healthcare-hospital.owl#"
+from services.reference_vocab import (  # noqa: E402  (vocabularies are defined once, shared with the data contract)
+    ENCOUNTER_TYPES, GENDERS, MEDICATION_CATEGORIES, SPECIALTIES,
 )
+
+ONTOLOGY_IRI = "http://example.org/healthcare-hospital.owl"
+ONTOLOGY_VERSION = "2.0.0"
+UTC = datetime.timezone.utc
+
+
+class AnyURI(str):
+    """Python carrier for xsd:anyURI (Owlready2 has no built-in mapping)."""
+
+
+declare_datatype(AnyURI, "http://www.w3.org/2001/XMLSchema#anyURI", AnyURI, str)
+
+onto = get_ontology(ONTOLOGY_IRI + "#")
+skos = get_ontology("http://www.w3.org/2004/02/skos/core#")
+
+with skos:
+    # Only the SKOS terms we use. They are referenced by IRI; SKOS is not copied
+    # into our file.
+    class Concept(Thing):
+        pass
+
+    class ConceptScheme(Thing):
+        pass
+
+    class inScheme(ObjectProperty):
+        pass
+
+    class prefLabel(AnnotationProperty):
+        pass
+
+    class notation(AnnotationProperty):
+        pass
+
+
+def _auto_label(name):
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name)
+    return words if name[0].isupper() else words.lower()
+
 
 with onto:
-
-    # ============================================================
-    # TOP LEVEL CLASSES
-    # ============================================================
-
-    class Person(Thing):
-        pass
-
-    class Hospital(Thing):
-        pass
-
-    class Department(Thing):
-        pass
-
-    class Ward(Thing):
-        pass
-
-    class Room(Thing):
-        pass
-
-    class Bed(Thing):
-        pass
-
-    class Appointment(Thing):
-        pass
-
-    class Admission(Thing):
-        pass
-
-    class Discharge(Thing):
-        pass
-
-    class MedicalRecord(Thing):
-        pass
-
-    class Diagnosis(Thing):
-        pass
-
-    class Treatment(Thing):
-        pass
-
-    class Procedure(Thing):
-        pass
-
-    class Surgery(Thing):
-        pass
-
-    class Prescription(Thing):
-        pass
-
-    class Medication(Thing):
-        pass
-
-    class LaboratoryTest(Thing):
-        pass
-
-    class LabResult(Thing):
-        pass
-
-    class Allergy(Thing):
-        pass
-
-    class Vaccination(Thing):
-        pass
-
-    class InsurancePolicy(Thing):
-        pass
-
-    class InsuranceClaim(Thing):
-        pass
-
-    class Billing(Thing):
-        pass
-
-    class Invoice(Thing):
-        pass
-
-    class EmergencyCase(Thing):
-        pass
-
-    class MedicalDevice(Thing):
-        pass
-
-    class ClinicalNote(Thing):
-        pass
-
-    class Observation(Thing):
-        pass
-
-    class VitalSign(Thing):
-        pass
-
-    class CarePlan(Thing):
-        pass
-
-    class BloodBank(Thing):
-        pass
-
-    class Ambulance(Thing):
-        pass
-
-    # ============================================================
-    # PERSON HIERARCHY
-    # ============================================================
-
-    class Patient(Person):
-        pass
-
-    class Doctor(Person):
-        pass
-
-    class Nurse(Person):
-        pass
-
-    class Technician(Person):
-        pass
-
-    class Pharmacist(Person):
-        pass
-
-    class Surgeon(Doctor):
-        pass
-
-    class Physician(Doctor):
-        pass
-
-    class Cardiologist(Doctor):
-        pass
-
-    class Neurologist(Doctor):
-        pass
-
-    class Radiologist(Doctor):
-        pass
-
-    class Pediatrician(Doctor):
-        pass
-
-    class Receptionist(Person):
-        pass
-
-    class Administrator(Person):
-        pass
-
-    class InsuranceAgent(Person):
-        pass
-
-    # ============================================================
-    # DEPARTMENT HIERARCHY
-    # ============================================================
-
-    class EmergencyDepartment(Department):
-        pass
-
-    class CardiologyDepartment(Department):
-        pass
-
-    class NeurologyDepartment(Department):
-        pass
-
-    class OrthopedicDepartment(Department):
-        pass
-
-    class PediatricsDepartment(Department):
-        pass
-
-    class OncologyDepartment(Department):
-        pass
-
-    class RadiologyDepartment(Department):
-        pass
-
-    class PharmacyDepartment(Department):
-        pass
-
-    class LaboratoryDepartment(Department):
-        pass
-
-    class ICUDepartment(Department):
-        pass
-
-    # ============================================================
-    # MEDICAL RECORD HIERARCHY
-    # ============================================================
-
-    class InpatientRecord(MedicalRecord):
-        pass
-
-    class OutpatientRecord(MedicalRecord):
-        pass
-
-    class EmergencyRecord(MedicalRecord):
-        pass
-
-    # ============================================================
-    # TREATMENT HIERARCHY
-    # ============================================================
-
-    class MedicationTreatment(Treatment):
-        pass
-
-    class PhysicalTherapy(Treatment):
-        pass
-
-    class RadiationTherapy(Treatment):
-        pass
-
-    class Chemotherapy(Treatment):
-        pass
-
-    class SurgicalTreatment(Treatment):
-        pass
-
-    # ============================================================
-    # LAB TEST HIERARCHY
-    # ============================================================
-
-    class BloodTest(LaboratoryTest):
-        pass
-
-    class UrineTest(LaboratoryTest):
-        pass
-
-    class CTScan(LaboratoryTest):
-        pass
-
-    class MRI(LaboratoryTest):
-        pass
-
-    class XRay(LaboratoryTest):
-        pass
-
-    class Ultrasound(LaboratoryTest):
-        pass
-
-    # ============================================================
-    # MEDICATION HIERARCHY
-    # ============================================================
-
-    class Antibiotic(Medication):
-        pass
-
-    class Analgesic(Medication):
-        pass
-
-    class Antiviral(Medication):
-        pass
-
-    class Vaccine(Medication):
-        pass
-
-    class ControlledDrug(Medication):
-        pass
-
-    # ============================================================
-    # OBJECT PROPERTIES
-    # ============================================================
-
-    # ------------------------------------------------------------
-    # HOSPITAL STRUCTURE
-    # ------------------------------------------------------------
-
-    class hasDepartment(ObjectProperty):
-        domain = [Hospital]
-        range = [Department]
-
-    class belongsToHospital(ObjectProperty):
-        domain = [Department]
-        range = [Hospital]
-
-    class containsWard(ObjectProperty):
-        domain = [Department]
-        range = [Ward]
-
-    class containsRoom(ObjectProperty):
-        domain = [Ward]
-        range = [Room]
-
-    class containsBed(ObjectProperty):
-        domain = [Room]
-        range = [Bed]
-
-    # ------------------------------------------------------------
-    # STAFF RELATIONSHIPS
-    # ------------------------------------------------------------
-
-    class worksInDepartment(ObjectProperty):
-        domain = [Person]
-        range = [Department]
-
-    class reportsTo(ObjectProperty):
-        domain = [Person]
-        range = [Person]
-
-    class managesDepartment(ObjectProperty):
-        domain = [Administrator]
-        range = [Department]
-
-    # ------------------------------------------------------------
-    # PATIENT RELATIONSHIPS
-    # ------------------------------------------------------------
-
-    class hasMedicalRecord(ObjectProperty):
-        domain = [Patient]
-        range = [MedicalRecord]
-
-    class admittedTo(ObjectProperty):
-        domain = [Patient]
-        range = [Admission]
-
-    class dischargedFrom(ObjectProperty):
-        domain = [Patient]
-        range = [Discharge]
-
-    class assignedBed(ObjectProperty):
-        domain = [Patient]
-        range = [Bed]
-
-    class coveredByInsurance(ObjectProperty):
-        domain = [Patient]
-        range = [InsurancePolicy]
-
-    # ------------------------------------------------------------
-    # APPOINTMENTS
-    # ------------------------------------------------------------
-
-    class hasAppointment(ObjectProperty):
-        domain = [Patient]
-        range = [Appointment]
-
-    class appointmentForPatient(ObjectProperty):
-        domain = [Appointment]
-        range = [Patient]
-
-    class appointmentWithDoctor(ObjectProperty):
-        domain = [Appointment]
-        range = [Doctor]
-
-    class appointmentAtHospital(ObjectProperty):
-        domain = [Appointment]
-        range = [Hospital]
-
-    # ------------------------------------------------------------
-    # DIAGNOSIS
-    # ------------------------------------------------------------
-
-    class hasDiagnosis(ObjectProperty):
-        domain = [Patient]
-        range = [Diagnosis]
-
-    class diagnosedBy(ObjectProperty):
-        domain = [Diagnosis]
-        range = [Doctor]
-
-    class diagnosisForPatient(ObjectProperty):
-        domain = [Diagnosis]
-        range = [Patient]
-
-    class requiresTreatment(ObjectProperty):
-        domain = [Diagnosis]
-        range = [Treatment]
-
-    # ------------------------------------------------------------
-    # TREATMENT
-    # ------------------------------------------------------------
-
-    class receivesTreatment(ObjectProperty):
-        domain = [Patient]
-        range = [Treatment]
-
-    class performedByDoctor(ObjectProperty):
-        domain = [Treatment]
-        range = [Doctor]
-
-    class includesProcedure(ObjectProperty):
-        domain = [Treatment]
-        range = [Procedure]
-
-    class involvesSurgery(ObjectProperty):
-        domain = [Treatment]
-        range = [Surgery]
-
-    # ------------------------------------------------------------
-    # PRESCRIPTION
-    # ------------------------------------------------------------
-
-    class hasPrescription(ObjectProperty):
-        domain = [Patient]
-        range = [Prescription]
-
-    class prescribedBy(ObjectProperty):
-        domain = [Prescription]
-        range = [Doctor]
-
-    class prescribedFor(ObjectProperty):
-        domain = [Prescription]
-        range = [Patient]
-
-    class containsMedication(ObjectProperty):
-        domain = [Prescription]
-        range = [Medication]
-
-    # ------------------------------------------------------------
-    # LABORATORY
-    # ------------------------------------------------------------
-
-    class orderedLabTest(ObjectProperty):
-        domain = [Doctor]
-        range = [LaboratoryTest]
-
-    class underwentLabTest(ObjectProperty):
-        domain = [Patient]
-        range = [LaboratoryTest]
-
-    class producesResult(ObjectProperty):
-        domain = [LaboratoryTest]
-        range = [LabResult]
-
-    class reviewedByDoctor(ObjectProperty):
-        domain = [LabResult]
-        range = [Doctor]
-
-    # ------------------------------------------------------------
-    # ALLERGIES
-    # ------------------------------------------------------------
-
-    class hasAllergy(ObjectProperty):
-        domain = [Patient]
-        range = [Allergy]
-
-    class allergyToMedication(ObjectProperty):
-        domain = [Allergy]
-        range = [Medication]
-
-    # ------------------------------------------------------------
-    # VACCINATIONS
-    # ------------------------------------------------------------
-
-    class hasVaccination(ObjectProperty):
-        domain = [Patient]
-        range = [Vaccination]
-
-    class administeredBy(ObjectProperty):
-        domain = [Vaccination]
-        range = [Nurse]
-
-    # ------------------------------------------------------------
-    # BILLING
-    # ------------------------------------------------------------
-
-    class hasBilling(ObjectProperty):
-        domain = [Patient]
-        range = [Billing]
-
-    class generatesInvoice(ObjectProperty):
-        domain = [Billing]
-        range = [Invoice]
-
-    class submitsClaim(ObjectProperty):
-        domain = [Billing]
-        range = [InsuranceClaim]
-
-    class claimAgainstPolicy(ObjectProperty):
-        domain = [InsuranceClaim]
-        range = [InsurancePolicy]
-
-    # ------------------------------------------------------------
-    # EMERGENCY
-    # ------------------------------------------------------------
-
-    class emergencyCaseFor(ObjectProperty):
-        domain = [EmergencyCase]
-        range = [Patient]
-
-    class handledByDoctor(ObjectProperty):
-        domain = [EmergencyCase]
-        range = [Doctor]
-
-    class transportedBy(ObjectProperty):
-        domain = [EmergencyCase]
-        range = [Ambulance]
-
-    # ------------------------------------------------------------
-    # OBSERVATIONS
-    # ------------------------------------------------------------
-
-    class hasObservation(ObjectProperty):
-        domain = [Patient]
-        range = [Observation]
-
-    class recordsVitalSign(ObjectProperty):
-        domain = [Observation]
-        range = [VitalSign]
-
-    class enteredByNurse(ObjectProperty):
-        domain = [Observation]
-        range = [Nurse]
-
-    # ------------------------------------------------------------
-    # CARE PLAN
-    # ------------------------------------------------------------
-
-    class followsCarePlan(ObjectProperty):
-        domain = [Patient]
-        range = [CarePlan]
-
-    class createdByDoctor(ObjectProperty):
-        domain = [CarePlan]
-        range = [Doctor]
-
-    # ------------------------------------------------------------
-    # MEDICAL DEVICES
-    # ------------------------------------------------------------
-
-    class usesMedicalDevice(ObjectProperty):
-        domain = [Treatment]
-        range = [MedicalDevice]
-
-    # ------------------------------------------------------------
-    # CLINICAL NOTES
-    # ------------------------------------------------------------
-
-    class hasClinicalNote(ObjectProperty):
-        domain = [MedicalRecord]
-        range = [ClinicalNote]
-
-    class authoredBy(ObjectProperty):
-        domain = [ClinicalNote]
-        range = [Doctor]
-
-        # ============================================================
-    # DATA PROPERTIES
-    # ============================================================
-
-    # ------------------------------------------------------------
-    # PERSON DATA
-    # ------------------------------------------------------------
-
-    class personId(DataProperty, FunctionalProperty):
-        domain = [Person]
-        range = [str]
-
-    class firstName(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    class lastName(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    class gender(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    class dateOfBirth(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    class phoneNumber(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    class emailAddress(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    class address(DataProperty):
-        domain = [Person]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # PATIENT DATA
-    # ------------------------------------------------------------
-
-    class patientNumber(DataProperty, FunctionalProperty):
-        domain = [Patient]
-        range = [str]
-
-    class bloodGroup(DataProperty):
-        domain = [Patient]
-        range = [str]
-
-    class maritalStatus(DataProperty):
-        domain = [Patient]
-        range = [str]
-
-    class emergencyContact(DataProperty):
-        domain = [Patient]
-        range = [str]
-
-    class patientStatus(DataProperty):
-        domain = [Patient]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # DOCTOR DATA
-    # ------------------------------------------------------------
-
-    class doctorLicenseNumber(DataProperty):
-        domain = [Doctor]
-        range = [str]
-
-    class specialization(DataProperty):
-        domain = [Doctor]
-        range = [str]
-
-    class yearsOfExperience(DataProperty):
-        domain = [Doctor]
-        range = [int]
-
-    class consultationFee(DataProperty):
-        domain = [Doctor]
-        range = [float]
-
-    # ------------------------------------------------------------
-    # NURSE DATA
-    # ------------------------------------------------------------
-
-    class nurseLicenseNumber(DataProperty):
-        domain = [Nurse]
-        range = [str]
-
-    class shiftType(DataProperty):
-        domain = [Nurse]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # HOSPITAL DATA
-    # ------------------------------------------------------------
-
-    class hospitalId(DataProperty):
-        domain = [Hospital]
-        range = [str]
-
-    class hospitalName(DataProperty):
-        domain = [Hospital]
-        range = [str]
-
-    class hospitalLocation(DataProperty):
-        domain = [Hospital]
-        range = [str]
-
-    class hospitalType(DataProperty):
-        domain = [Hospital]
-        range = [str]
-
-    class totalBeds(DataProperty):
-        domain = [Hospital]
-        range = [int]
-
-    # ------------------------------------------------------------
-    # DEPARTMENT DATA
-    # ------------------------------------------------------------
-
-    class departmentCode(DataProperty):
-        domain = [Department]
-        range = [str]
-
-    class departmentName(DataProperty):
-        domain = [Department]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # ROOM DATA
-    # ------------------------------------------------------------
-
-    class roomNumber(DataProperty):
-        domain = [Room]
-        range = [str]
-
-    class roomType(DataProperty):
-        domain = [Room]
-        range = [str]
-
-    class floorNumber(DataProperty):
-        domain = [Room]
-        range = [int]
-
-    # ------------------------------------------------------------
-    # BED DATA
-    # ------------------------------------------------------------
-
-    class bedNumber(DataProperty):
-        domain = [Bed]
-        range = [str]
-
-    class bedStatus(DataProperty):
-        domain = [Bed]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # APPOINTMENT DATA
-    # ------------------------------------------------------------
-
-    class appointmentId(DataProperty):
-        domain = [Appointment]
-        range = [str]
-
-    class appointmentDate(DataProperty):
-        domain = [Appointment]
-        range = [str]
-
-    class appointmentTime(DataProperty):
-        domain = [Appointment]
-        range = [str]
-
-    class appointmentStatus(DataProperty):
-        domain = [Appointment]
-        range = [str]
-
-    class appointmentReason(DataProperty):
-        domain = [Appointment]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # ADMISSION DATA
-    # ------------------------------------------------------------
-
-    class admissionId(DataProperty):
-        domain = [Admission]
-        range = [str]
-
-    class admissionDate(DataProperty):
-        domain = [Admission]
-        range = [str]
-
-    class admissionReason(DataProperty):
-        domain = [Admission]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # DISCHARGE DATA
-    # ------------------------------------------------------------
-
-    class dischargeDate(DataProperty):
-        domain = [Discharge]
-        range = [str]
-
-    class dischargeSummary(DataProperty):
-        domain = [Discharge]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # MEDICAL RECORD DATA
-    # ------------------------------------------------------------
-
-    class recordNumber(DataProperty):
-        domain = [MedicalRecord]
-        range = [str]
-
-    class recordCreatedDate(DataProperty):
-        domain = [MedicalRecord]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # DIAGNOSIS DATA
-    # ------------------------------------------------------------
-
-    class diagnosisCode(DataProperty):
-        domain = [Diagnosis]
-        range = [str]
-
-    class diagnosisName(DataProperty):
-        domain = [Diagnosis]
-        range = [str]
-
-    class diagnosisDescription(DataProperty):
-        domain = [Diagnosis]
-        range = [str]
-
-    class diagnosisDate(DataProperty):
-        domain = [Diagnosis]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # TREATMENT DATA
-    # ------------------------------------------------------------
-
-    class treatmentId(DataProperty):
-        domain = [Treatment]
-        range = [str]
-
-    class treatmentName(DataProperty):
-        domain = [Treatment]
-        range = [str]
-
-    class treatmentStatus(DataProperty):
-        domain = [Treatment]
-        range = [str]
-
-    class treatmentCost(DataProperty):
-        domain = [Treatment]
-        range = [float]
-
-    # ------------------------------------------------------------
-    # PROCEDURE DATA
-    # ------------------------------------------------------------
-
-    class procedureCode(DataProperty):
-        domain = [Procedure]
-        range = [str]
-
-    class procedureName(DataProperty):
-        domain = [Procedure]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # SURGERY DATA
-    # ------------------------------------------------------------
-
-    class surgeryCode(DataProperty):
-        domain = [Surgery]
-        range = [str]
-
-    class surgeryDate(DataProperty):
-        domain = [Surgery]
-        range = [str]
-
-    class surgeryDurationMinutes(DataProperty):
-        domain = [Surgery]
-        range = [int]
-
-    # ------------------------------------------------------------
-    # PRESCRIPTION DATA
-    # ------------------------------------------------------------
-
-    class prescriptionNumber(DataProperty):
-        domain = [Prescription]
-        range = [str]
-
-    class prescriptionDate(DataProperty):
-        domain = [Prescription]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # MEDICATION DATA
-    # ------------------------------------------------------------
-
-    class medicationCode(DataProperty):
-        domain = [Medication]
-        range = [str]
-
-    class medicationName(DataProperty):
-        domain = [Medication]
-        range = [str]
-
-    class dosage(DataProperty):
-        domain = [Medication]
-        range = [str]
-
-    class manufacturer(DataProperty):
-        domain = [Medication]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # LAB TEST DATA
-    # ------------------------------------------------------------
-
-    class testCode(DataProperty):
-        domain = [LaboratoryTest]
-        range = [str]
-
-    class testName(DataProperty):
-        domain = [LaboratoryTest]
-        range = [str]
-
-    class testDate(DataProperty):
-        domain = [LaboratoryTest]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # LAB RESULT DATA
-    # ------------------------------------------------------------
-
-    class resultValue(DataProperty):
-        domain = [LabResult]
-        range = [str]
-
-    class resultStatus(DataProperty):
-        domain = [LabResult]
-        range = [str]
-
-    class resultDate(DataProperty):
-        domain = [LabResult]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # INSURANCE DATA
-    # ------------------------------------------------------------
-
-    class policyNumber(DataProperty):
-        domain = [InsurancePolicy]
-        range = [str]
-
-    class insuranceProvider(DataProperty):
-        domain = [InsurancePolicy]
-        range = [str]
-
-    class coverageAmount(DataProperty):
-        domain = [InsurancePolicy]
-        range = [float]
-
-    # ------------------------------------------------------------
-    # BILLING DATA
-    # ------------------------------------------------------------
-
-    class billingNumber(DataProperty):
-        domain = [Billing]
-        range = [str]
-
-    class billingAmount(DataProperty):
-        domain = [Billing]
-        range = [float]
-
-    class paymentStatus(DataProperty):
-        domain = [Billing]
-        range = [str]
-
-    # ------------------------------------------------------------
-    # INVOICE DATA
-    # ------------------------------------------------------------
-
-    class invoiceNumber(DataProperty):
-        domain = [Invoice]
-        range = [str]
-
-    class invoiceDate(DataProperty):
-        domain = [Invoice]
-        range = [str]
-
-    # ============================================================
-    # OWL RESTRICTIONS
-    # ============================================================
-
-    Patient.is_a.append(
-        hasMedicalRecord.min(1, MedicalRecord)
-    )
-
-    Patient.is_a.append(
-        hasAppointment.min(1, Appointment)
-    )
-
-    Appointment.is_a.append(
-        appointmentForPatient.exactly(1, Patient)
-    )
-
-    Appointment.is_a.append(
-        appointmentWithDoctor.exactly(1, Doctor)
-    )
-
-    Diagnosis.is_a.append(
-        diagnosedBy.exactly(1, Doctor)
-    )
-
-    Diagnosis.is_a.append(
-        diagnosisForPatient.exactly(1, Patient)
-    )
-
-    Prescription.is_a.append(
-        prescribedBy.exactly(1, Doctor)
-    )
-
-    Prescription.is_a.append(
-        prescribedFor.exactly(1, Patient)
-    )
-
-    Prescription.is_a.append(
-        containsMedication.min(1, Medication)
-    )
-
-    Treatment.is_a.append(
-        performedByDoctor.min(1, Doctor)
-    )
-
-    LaboratoryTest.is_a.append(
-        producesResult.min(1, LabResult)
-    )
-
-    Billing.is_a.append(
-        generatesInvoice.exactly(1, Invoice)
-    )
-
-    CarePlan.is_a.append(
-        createdByDoctor.exactly(1, Doctor)
-    )
-
-    Vaccination.is_a.append(
-        administeredBy.exactly(1, Nurse)
-    )
-
-    Hospital.is_a.append(
-        hasDepartment.min(1, Department)
-    )
-
-    Department.is_a.append(
-        containsWard.min(1, Ward)
-    )
-
-    Ward.is_a.append(
-        containsRoom.min(1, Room)
-    )
-
-    Room.is_a.append(
-        containsBed.min(1, Bed)
-    )
-
-    EmergencyCase.is_a.append(
-        handledByDoctor.min(1, Doctor)
-    )
-
-    EmergencyCase.is_a.append(
-        emergencyCaseFor.exactly(1, Patient)
-    )
-
-    # ============================================================
-    # DISJOINT CLASSES
-    # ============================================================
-
-    AllDisjoint([
-        Patient,
-        Doctor,
-        Nurse,
-        Technician,
-        Pharmacist,
-        Receptionist,
-        Administrator
-    ])
-
-    AllDisjoint([
-        Appointment,
-        Admission,
-        Discharge
-    ])
-
-    AllDisjoint([
-        Diagnosis,
-        Treatment,
-        Procedure,
-        Surgery
-    ])
-
-    AllDisjoint([
-        Prescription,
-        Medication
-    ])
-
-    AllDisjoint([
-        LaboratoryTest,
-        LabResult
-    ])
-
-    # ============================================================
-    # ANNOTATIONS
-    # ============================================================
-
-    Hospital.label = ["Hospital"]
-    Hospital.comment = [
-        "Healthcare organization providing medical services."
+    # ========================================================================
+    # CLASSES   (name, parent, comment)   - label is derived from the name
+    # ========================================================================
+    CLASSES = [
+        # --- people -------------------------------------------------------
+        ("Person", Thing, "A human being. Roles (patient, practitioner) are classes here for simplicity; a person who is both is typed with both."),
+        ("Patient", "Person", "A person who receives, or is registered to receive, healthcare services."),
+        ("Practitioner", "Person", "A person who delivers clinical care or clinical support in a healthcare setting."),
+        ("Doctor", "Practitioner", "A licensed medical practitioner. Clinical specialty is NOT a subclass: see hasSpecialty."),
+        ("Nurse", "Practitioner", "A practitioner providing nursing care."),
+        ("Pharmacist", "Practitioner", "A practitioner who dispenses and advises on medication."),
+        ("Technician", "Practitioner", "A practitioner who performs technical or diagnostic support work."),
+        ("Administrator", "Person", "A non-clinical staff member who manages organizational units."),
+        ("Receptionist", "Person", "A non-clinical staff member handling front-desk administration."),
+        ("InsuranceAgent", "Person", "A person acting for an insurer in coverage or claim matters."),
+        # --- organizations and places ------------------------------------
+        ("Organization", Thing, "A formally or informally recognized group of people that provides or administers healthcare."),
+        ("Hospital", "Organization", "An organization providing inpatient and outpatient medical services."),
+        ("Department", "Organization", "An organizational unit of a hospital, optionally focused on a clinical specialty."),
+        ("Location", Thing, "A physical place where care can be delivered or a patient can be placed."),
+        ("Ward", "Location", "A group of rooms within a hospital operated for a category of care."),
+        ("Room", "Location", "A room within a ward, used to place beds and patients."),
+        ("Bed", "Location", "A single bed within a room; the smallest placement unit."),
+        ("Ambulance", Thing, "A vehicle used to transport patients to or between care locations."),
+        ("MedicalDevice", Thing, "A device used in diagnosis or treatment."),
+        # --- clinical events and facts -----------------------------------
+        ("Encounter", Thing, "An interaction between a patient and healthcare practitioners during which care is delivered. It occurred (or is occurring); a future booking is an Appointment."),
+        ("Appointment", Thing, "A planned booking of a patient with a practitioner. It may be fulfilled by an Encounter."),
+        ("Condition", Thing, "A clinical problem, disease, or health state of a patient, recorded for one patient at a point in time."),
+        ("Diagnosis", "Condition", "A Condition established by a clinician's judgement."),
+        ("Observation", Thing, "A measurement or assertion about a patient made at a point in time, such as a vital sign or a result."),
+        ("VitalSign", "Observation", "An Observation of a basic physiological measure such as blood pressure."),
+        ("DiagnosticResult", "Observation", "An Observation that is the outcome of a diagnostic test."),
+        ("Procedure", Thing, "An action performed on or for a patient, such as a surgery or an electrocardiogram."),
+        ("Surgery", "Procedure", "A Procedure that involves cutting or other operative intervention."),
+        ("Treatment", Thing, "A planned therapeutic intervention intended to address a condition."),
+        ("MedicationTreatment", "Treatment", "A Treatment delivered primarily through medication."),
+        ("PhysicalTherapy", "Treatment", "A Treatment delivered through physical rehabilitation."),
+        ("RadiationTherapy", "Treatment", "A Treatment delivered through ionizing radiation."),
+        ("Chemotherapy", "Treatment", "A Treatment delivered through cytotoxic drugs."),
+        ("SurgicalTreatment", "Treatment", "A Treatment that centres on a Surgery."),
+        ("DiagnosticTest", Thing, "An examination ordered to obtain diagnostic information."),
+        ("LaboratoryTest", "DiagnosticTest", "A DiagnosticTest performed on a specimen in a laboratory."),
+        ("ImagingStudy", "DiagnosticTest", "A DiagnosticTest that produces images, for example MRI or X-ray. Not a laboratory test."),
+        ("CarePlan", Thing, "A plan of care created by a practitioner for a patient."),
+        ("MedicalRecord", Thing, "The container for a patient's clinical documentation."),
+        ("ClinicalNote", Thing, "A free-text clinical document authored by a practitioner."),
+        # --- medication ---------------------------------------------------
+        ("Medication", Thing, "A drug as a concept (for example metformin), not a dispensed package or a patient's dose."),
+        ("Prescription", Thing, "An order by a practitioner to supply medication to a patient (equivalent to a FHIR MedicationRequest)."),
+        ("Allergy", Thing, "A patient's recorded adverse reaction to a substance (equivalent to a FHIR AllergyIntolerance)."),
+        ("Vaccination", Thing, "An administration of a vaccine to a patient."),
+        # --- administrative / financial ----------------------------------
+        ("InsurancePolicy", Thing, "A health insurance coverage agreement."),
+        ("InsuranceClaim", Thing, "A request to an insurer for payment of services."),
+        ("Billing", Thing, "A billing account entry for services provided to a patient."),
+        ("Invoice", Thing, "A request for payment issued from a Billing entry."),
+        # --- identification and terminology -------------------------------
+        ("Identifier", Thing, "A business identifier assigned by an issuing system, for example a medical record number or a license number."),
+        ("CodeConcept", Thing, "A reference to a concept in an external code system (codeSystem + codeValue + codeDisplay). The terminology itself is not stored."),
+        # --- controlled vocabularies (SKOS concepts) ----------------------
+        ("Specialty", skos.Concept, "A clinical specialty such as cardiology. A SKOS concept, not a class hierarchy of practitioners."),
+        ("AdministrativeGender", skos.Concept, "The administrative gender used for record keeping (male, female, other, unknown)."),
+        ("EncounterType", skos.Concept, "The setting of an Encounter: ambulatory, inpatient, emergency, or virtual."),
+        ("MedicationCategory", skos.Concept, "A therapeutic category of a Medication, such as analgesic or antidiabetic."),
     ]
 
-    Patient.label = ["Patient"]
-    Patient.comment = [
-        "Individual receiving healthcare services."
-    ]
-
-    Doctor.label = ["Doctor"]
-    Doctor.comment = [
-        "Licensed medical practitioner."
-    ]
-
-    Nurse.label = ["Nurse"]
-    Nurse.comment = [
-        "Healthcare professional providing patient care."
-    ]
-
-    Appointment.label = ["Appointment"]
-    Appointment.comment = [
-        "Scheduled meeting between patient and doctor."
-    ]
-
-    MedicalRecord.label = ["Medical Record"]
-    MedicalRecord.comment = [
-        "Complete medical history of a patient."
-    ]
-
-    Diagnosis.label = ["Diagnosis"]
-    Diagnosis.comment = [
-        "Identification of a disease or medical condition."
-    ]
-
-    Treatment.label = ["Treatment"]
-    Treatment.comment = [
-        "Medical intervention provided to a patient."
-    ]
-
-    Prescription.label = ["Prescription"]
-    Prescription.comment = [
-        "Medication instructions issued by a doctor."
-    ]
-
-    Medication.label = ["Medication"]
-    Medication.comment = [
-        "Drug or pharmaceutical product."
-    ]
-
-    LaboratoryTest.label = ["Laboratory Test"]
-    LaboratoryTest.comment = [
-        "Medical test performed to support diagnosis."
-    ]
-
-    InsurancePolicy.label = ["Insurance Policy"]
-    InsurancePolicy.comment = [
-        "Health insurance coverage agreement."
-    ]
-
-        # ============================================================
-    # INDIVIDUALS
-    # ============================================================
-
-    # ------------------------------------------------------------
-    # HOSPITAL
-    # ------------------------------------------------------------
-
-    city_hospital = Hospital("CityHospital")
-
-    # ------------------------------------------------------------
-    # DEPARTMENTS
-    # ------------------------------------------------------------
-
-    cardiology = CardiologyDepartment("CardiologyDept")
-    neurology = NeurologyDepartment("NeurologyDept")
-    emergency = EmergencyDepartment("EmergencyDept")
-    radiology = RadiologyDepartment("RadiologyDept")
-    pharmacy = PharmacyDepartment("PharmacyDept")
-    laboratory = LaboratoryDepartment("LaboratoryDept")
-    icu = ICUDepartment("ICUDept")
-
-    # ------------------------------------------------------------
-    # WARDS
-    # ------------------------------------------------------------
-
-    ward_a = Ward("WardA")
-    ward_b = Ward("WardB")
-    ward_icu = Ward("WardICU")
-
-    # ------------------------------------------------------------
-    # ROOMS
-    # ------------------------------------------------------------
-
-    room_101 = Room("Room101")
-    room_102 = Room("Room102")
-    room_201 = Room("Room201")
-    room_icu1 = Room("RoomICU1")
-
-    # ------------------------------------------------------------
-    # BEDS
-    # ------------------------------------------------------------
-
-    bed_1 = Bed("Bed1")
-    bed_2 = Bed("Bed2")
-    bed_3 = Bed("Bed3")
-    bed_4 = Bed("Bed4")
-
-    # ------------------------------------------------------------
-    # DOCTORS
-    # ------------------------------------------------------------
-
-    dr_smith = Cardiologist("DrSmith")
-    dr_john = Neurologist("DrJohn")
-    dr_williams = Surgeon("DrWilliams")
-    dr_kumar = Physician("DrKumar")
-
-    # ------------------------------------------------------------
-    # NURSES
-    # ------------------------------------------------------------
-
-    nurse_mary = Nurse("NurseMary")
-    nurse_rita = Nurse("NurseRita")
-
-    # ------------------------------------------------------------
-    # PATIENTS
-    # ------------------------------------------------------------
-
-    patient_john = Patient("PatientJohn")
-    patient_emma = Patient("PatientEmma")
-    patient_david = Patient("PatientDavid")
-
-    # ------------------------------------------------------------
-    # MEDICAL RECORDS
-    # ------------------------------------------------------------
-
-    mr_john = InpatientRecord("MRJohn")
-    mr_emma = OutpatientRecord("MREmma")
-    mr_david = EmergencyRecord("MRDavid")
-
-    # ------------------------------------------------------------
-    # APPOINTMENTS
-    # ------------------------------------------------------------
-
-    appt_001 = Appointment("Appointment001")
-    appt_002 = Appointment("Appointment002")
-
-    # ------------------------------------------------------------
-    # DIAGNOSES
-    # ------------------------------------------------------------
-
-    diag_flu = Diagnosis("DiagnosisFlu")
-    diag_hypertension = Diagnosis("DiagnosisHypertension")
-    diag_migraine = Diagnosis("DiagnosisMigraine")
-
-    # ------------------------------------------------------------
-    # TREATMENTS
-    # ------------------------------------------------------------
-
-    treatment_flu = MedicationTreatment("TreatmentFlu")
-    treatment_bp = MedicationTreatment("TreatmentBP")
-    treatment_neuro = PhysicalTherapy("TreatmentNeuro")
-
-    # ------------------------------------------------------------
-    # MEDICATIONS
-    # ------------------------------------------------------------
-
-    paracetamol = Analgesic("Paracetamol")
-    amoxicillin = Antibiotic("Amoxicillin")
-    aspirin = Analgesic("Aspirin")
-
-    # ------------------------------------------------------------
-    # PRESCRIPTIONS
-    # ------------------------------------------------------------
-
-    rx_001 = Prescription("Prescription001")
-    rx_002 = Prescription("Prescription002")
-
-    # ------------------------------------------------------------
-    # LAB TESTS
-    # ------------------------------------------------------------
-
-    blood_test_1 = BloodTest("BloodTest001")
-    mri_1 = MRI("MRI001")
-
-    # ------------------------------------------------------------
-    # LAB RESULTS
-    # ------------------------------------------------------------
-
-    blood_result_1 = LabResult("BloodResult001")
-    mri_result_1 = LabResult("MRIResult001")
-
-    # ------------------------------------------------------------
-    # INSURANCE
-    # ------------------------------------------------------------
-
-    policy_a = InsurancePolicy("PolicyA")
-    claim_a = InsuranceClaim("ClaimA")
-
-    # ------------------------------------------------------------
-    # BILLING
-    # ------------------------------------------------------------
-
-    billing_1 = Billing("Billing001")
-    invoice_1 = Invoice("Invoice001")
-
-    # ------------------------------------------------------------
-    # CARE PLAN
-    # ------------------------------------------------------------
-
-    careplan_1 = CarePlan("CarePlan001")
-
-    # ------------------------------------------------------------
-    # OBSERVATION
-    # ------------------------------------------------------------
-
-    observation_1 = Observation("Observation001")
-    vitals_1 = VitalSign("VitalSigns001")
-
-    # ------------------------------------------------------------
-    # EMERGENCY
-    # ------------------------------------------------------------
-
-    emergency_case_1 = EmergencyCase("Emergency001")
-    ambulance_1 = Ambulance("Ambulance001")
-
-    # ============================================================
-    # DATA PROPERTY VALUES
-    # ============================================================
-
-    city_hospital.hospitalId = ["HOSP001"]
-    city_hospital.hospitalName = ["City General Hospital"]
-    city_hospital.hospitalLocation = ["New York"]
-    city_hospital.totalBeds = [500]
-
-    dr_smith.firstName = ["Robert"]
-    dr_smith.lastName = ["Smith"]
-    dr_smith.specialization = ["Cardiology"]
-    dr_smith.doctorLicenseNumber = ["DOC1001"]
-    dr_smith.yearsOfExperience = [15]
-
-    dr_john.specialization = ["Neurology"]
-    dr_williams.specialization = ["Surgery"]
-
-    patient_john.firstName = ["John"]
-    patient_john.lastName = ["Doe"]
-    patient_john.bloodGroup = ["O+"]
-
-    patient_emma.firstName = ["Emma"]
-    patient_emma.lastName = ["Wilson"]
-    patient_emma.bloodGroup = ["A+"]
-
-    patient_david.firstName = ["David"]
-    patient_david.lastName = ["Brown"]
-    patient_david.bloodGroup = ["B+"]
-
-    appt_001.appointmentId = ["APT001"]
-    appt_001.appointmentStatus = ["Completed"]
-
-    appt_002.appointmentId = ["APT002"]
-    appt_002.appointmentStatus = ["Scheduled"]
-
-    diag_flu.diagnosisCode = ["J10"]
-    diag_flu.diagnosisName = ["Influenza"]
-
-    diag_hypertension.diagnosisCode = ["I10"]
-    diag_hypertension.diagnosisName = ["Hypertension"]
-
-    diag_migraine.diagnosisCode = ["G43"]
-    diag_migraine.diagnosisName = ["Migraine"]
-
-    # ============================================================
-    # RELATIONSHIPS
-    # ============================================================
-
-    # Hospital Structure
-
-    city_hospital.hasDepartment.extend([
-        cardiology,
-        neurology,
-        emergency,
-        radiology,
-        pharmacy,
-        laboratory,
-        icu
-    ])
-
-    cardiology.containsWard.append(ward_a)
-    neurology.containsWard.append(ward_b)
-    icu.containsWard.append(ward_icu)
-
-    ward_a.containsRoom.extend([
-        room_101,
-        room_102
-    ])
-
-    ward_b.containsRoom.append(room_201)
-
-    ward_icu.containsRoom.append(room_icu1)
-
-    room_101.containsBed.append(bed_1)
-    room_101.containsBed.append(bed_2)
-    room_201.containsBed.append(bed_3)
-    room_icu1.containsBed.append(bed_4)
-
-    # Staff
-
-    dr_smith.worksInDepartment.append(cardiology)
-    dr_john.worksInDepartment.append(neurology)
-    dr_williams.worksInDepartment.append(emergency)
-
-    nurse_mary.worksInDepartment.append(cardiology)
-    nurse_rita.worksInDepartment.append(icu)
-
-    # Patient Records
-
-    patient_john.hasMedicalRecord.append(mr_john)
-    patient_emma.hasMedicalRecord.append(mr_emma)
-    patient_david.hasMedicalRecord.append(mr_david)
-
-    # Appointments
-
-    patient_john.hasAppointment.append(appt_001)
-
-    appt_001.appointmentForPatient.append(patient_john)
-    appt_001.appointmentWithDoctor.append(dr_smith)
-    appt_001.appointmentAtHospital.append(city_hospital)
-
-    appt_002.appointmentForPatient.append(patient_emma)
-    appt_002.appointmentWithDoctor.append(dr_john)
-
-    # Diagnoses
-
-    patient_john.hasDiagnosis.append(diag_hypertension)
-    patient_emma.hasDiagnosis.append(diag_flu)
-    patient_david.hasDiagnosis.append(diag_migraine)
-
-    diag_hypertension.diagnosedBy.append(dr_smith)
-    diag_hypertension.diagnosisForPatient.append(patient_john)
-
-    diag_flu.diagnosedBy.append(dr_kumar)
-    diag_flu.diagnosisForPatient.append(patient_emma)
-
-    diag_migraine.diagnosedBy.append(dr_john)
-    diag_migraine.diagnosisForPatient.append(patient_david)
-
-    # Treatments
-
-    diag_hypertension.requiresTreatment.append(treatment_bp)
-    diag_flu.requiresTreatment.append(treatment_flu)
-    diag_migraine.requiresTreatment.append(treatment_neuro)
-
-    treatment_bp.performedByDoctor.append(dr_smith)
-    treatment_flu.performedByDoctor.append(dr_kumar)
-    treatment_neuro.performedByDoctor.append(dr_john)
-
-    patient_john.receivesTreatment.append(treatment_bp)
-    patient_emma.receivesTreatment.append(treatment_flu)
-    patient_david.receivesTreatment.append(treatment_neuro)
-
-    # Prescriptions
-
-    rx_001.prescribedBy.append(dr_smith)
-    rx_001.prescribedFor.append(patient_john)
-
-    rx_002.prescribedBy.append(dr_kumar)
-    rx_002.prescribedFor.append(patient_emma)
-
-    rx_001.containsMedication.extend([
-        aspirin
-    ])
-
-    rx_002.containsMedication.extend([
-        paracetamol,
-        amoxicillin
-    ])
-
-    # Lab Tests
-
-    dr_smith.orderedLabTest.append(blood_test_1)
-
-    patient_john.underwentLabTest.append(
-        blood_test_1
+    C = {}
+    for _name, _parent, _comment in CLASSES:
+        _base = _parent if not isinstance(_parent, str) else C[_parent]
+        C[_name] = types.new_class(_name, (_base,))
+        C[_name].label = [_auto_label(_name)]
+        C[_name].comment = [_comment]
+
+    # ========================================================================
+    # PROPERTIES
+    # ========================================================================
+    P = {}
+    _INVERSES = []
+
+    def _classes(spec):
+        if spec is None:
+            return None
+        if isinstance(spec, (list, tuple)):
+            return [Or([C[s] for s in spec])] if len(spec) > 1 else [C[spec[0]]]
+        return [C[spec]]
+
+    def obj(name, domain, range_, comment, inverse=None, parent=None,
+            functional=False, transitive=False):
+        bases = [P[parent]] if parent else [ObjectProperty]
+        if functional:
+            bases.append(FunctionalProperty)
+        if transitive:
+            bases.append(TransitiveProperty)
+        prop = types.new_class(name, tuple(bases))
+        if domain is not None:
+            prop.domain = _classes(domain)
+        if range_ is not None:
+            prop.range = _classes(range_)
+        prop.label = [_auto_label(name)]
+        prop.comment = [comment]
+        P[name] = prop
+        if inverse:
+            _INVERSES.append((name, inverse))
+        return prop
+
+    # Single-valued attributes are FUNCTIONAL by default: "at most one value" is meaning
+    # the Neo4j projection relies on to store a scalar instead of a list. Genuinely
+    # multi-valued attributes opt out with functional=False.
+    def data(name, domain, range_, comment, functional=True):
+        bases = [DataProperty] + ([FunctionalProperty] if functional else [])
+        prop = types.new_class(name, tuple(bases))
+        prop.domain = _classes(domain)
+        prop.range = [range_]  # note: xsd:date is outside the OWL 2 datatype map (see docs)
+        prop.label = [_auto_label(name)]
+        prop.comment = [comment]
+        P[name] = prop
+        return prop
+
+    # ---- organization, location ------------------------------------------
+    obj("hasDepartment", "Hospital", "Department", "A hospital has this department.", inverse="belongsToHospital")
+    obj("belongsToHospital", "Department", "Hospital", "The hospital that this department is part of. Inferred as the inverse of hasDepartment.")
+    obj("containsWard", "Department", "Ward", "A department operates this ward.", inverse="wardOfDepartment")
+    obj("wardOfDepartment", "Ward", "Department", "The department that operates this ward. Inferred as the inverse of containsWard.", functional=True)
+    obj("partOfLocation", "Location", "Location", "Transitive physical containment: a bed is part of its room, ward and so on.", transitive=True)
+    obj("locatedInWard", "Room", "Ward", "The ward containing this room. Inverse of containsRoom.", parent="partOfLocation")
+    obj("locatedInRoom", "Bed", "Room", "The room containing this bed. Inverse of containsBed.", parent="partOfLocation")
+    obj("containsRoom", "Ward", "Room", "A ward contains this room.", inverse="locatedInWard")
+    obj("containsBed", "Room", "Bed", "A room contains this bed.", inverse="locatedInRoom")
+    obj("worksInDepartment", "Person", "Department", "A person works in this department.", inverse="hasStaffMember")
+    obj("hasStaffMember", "Department", "Person", "A person who works in this department. Inferred as the inverse of worksInDepartment.")
+    obj("reportsTo", "Person", "Person", "A person reports to another person in the staff hierarchy.", inverse="supervises")
+    obj("supervises", "Person", "Person", "A person who reports to this person in the staff hierarchy. Inferred as the inverse of reportsTo.")
+    obj("managesDepartment", "Administrator", "Department", "An administrator manages this department.", inverse="managedBy")
+    obj("managedBy", "Department", "Administrator", "An administrator who manages this department. Inferred as the inverse of managesDepartment.")
+
+    # ---- encounter ---------------------------------------------------------
+    obj("hasEncounter", "Patient", "Encounter", "A patient took part in this encounter.", inverse="encounterForPatient")
+    obj("encounterForPatient", "Encounter", "Patient", "The patient who is the subject of this encounter. Inferred as the inverse of hasEncounter.", functional=True)
+    obj("participatesIn", "Practitioner", "Encounter", "A practitioner took part in this encounter.", inverse="hasParticipant")
+    obj("hasParticipant", "Encounter", "Practitioner", "A practitioner who took part in this encounter. Inferred as the inverse of participatesIn.")
+    obj("diagnoses", "Encounter", "Condition", "A condition identified or confirmed during this encounter.", inverse="diagnosedIn")
+    obj("diagnosedIn", "Condition", "Encounter", "The encounter during which this condition was identified. Inferred as the inverse of diagnoses.")
+    obj("includesObservation", "Encounter", "Observation", "An observation made during this encounter.", inverse="observedDuring")
+    obj("observedDuring", "Observation", "Encounter", "The encounter during which this observation was made. Inferred as the inverse of includesObservation.")
+    obj("involvesProcedure", "Encounter", "Procedure", "A procedure performed during this encounter.", inverse="performedDuring")
+    obj("performedDuring", "Procedure", "Encounter", "The encounter during which this procedure was performed. Inferred as the inverse of involvesProcedure.")
+    obj("encounterType", "Encounter", "EncounterType", "The care setting of this encounter.", functional=True)
+    obj("encounterLocation", "Encounter", "Location", "Where the encounter took place.")
+    obj("serviceProvider", "Encounter", "Organization", "The organization responsible for the encounter.")
+    obj("transportedBy", "Encounter", "Ambulance", "The ambulance that brought the patient to this encounter.")
+    obj("fulfilledBy", "Appointment", "Encounter", "The encounter that fulfilled this appointment.", inverse="fulfillsAppointment", functional=True)
+    obj("fulfillsAppointment", "Encounter", "Appointment", "The appointment that this encounter fulfilled. Inferred as the inverse of fulfilledBy.")
+
+    # ---- patient records ---------------------------------------------------
+    obj("hasMedicalRecord", "Patient", "MedicalRecord", "The medical record of a patient.")
+    obj("coveredByInsurance", "Patient", "InsurancePolicy", "The insurance policy covering a patient.")
+    obj("hasAppointment", "Patient", "Appointment", "A patient has this appointment.", inverse="appointmentForPatient")
+    obj("appointmentForPatient", "Appointment", "Patient", "The patient an appointment is for. Inferred as the inverse of hasAppointment.", functional=True)
+    obj("appointmentWithDoctor", "Appointment", "Doctor", "The doctor an appointment is booked with.")
+    obj("appointmentAtHospital", "Appointment", "Hospital", "The hospital where an appointment takes place.")
+
+    # ---- conditions ----------------------------------------------------------
+    obj("hasCondition", "Patient", "Condition", "A patient has this condition.", inverse="conditionSubject")
+    obj("conditionSubject", "Condition", "Patient", "The patient a condition belongs to. A condition record belongs to exactly one patient.", functional=True)
+    obj("hasDiagnosis", "Patient", "Diagnosis", "A patient has this diagnosis.", parent="hasCondition", inverse="diagnosisForPatient")
+    obj("diagnosisForPatient", "Diagnosis", "Patient", "The patient a diagnosis belongs to. Inferred as the inverse of hasDiagnosis.", parent="conditionSubject")
+    obj("diagnosedBy", "Diagnosis", "Doctor", "The doctor who established this diagnosis.", inverse="madeDiagnosis")
+    obj("madeDiagnosis", "Doctor", "Diagnosis", "A diagnosis this doctor established. Inferred as the inverse of diagnosedBy.")
+    obj("requiresTreatment", "Diagnosis", "Treatment", "A treatment that this diagnosis calls for.", inverse="treatsDiagnosis")
+    obj("treatsDiagnosis", "Treatment", "Diagnosis", "A diagnosis that this treatment addresses. Inferred as the inverse of requiresTreatment.")
+
+    # ---- treatment, procedure ------------------------------------------------
+    obj("receivesTreatment", "Patient", "Treatment", "A treatment a patient receives.", inverse="treatmentForPatient")
+    obj("treatmentForPatient", "Treatment", "Patient", "The patient who receives this treatment. Inferred as the inverse of receivesTreatment.", functional=True)
+    obj("performedByDoctor", "Treatment", "Doctor", "The doctor responsible for a treatment.")
+    obj("includesProcedure", "Treatment", "Procedure", "A procedure that is part of a treatment.")
+    obj("involvesSurgery", "Treatment", "Surgery", "A surgery that is part of a treatment.", parent="includesProcedure")
+    obj("usesMedicalDevice", "Treatment", "MedicalDevice", "A device used in a treatment.")
+
+    # ---- medication, allergy, vaccination -----------------------------------
+    obj("prescribedFor", "Prescription", "Patient", "The patient a prescription is for.", inverse="hasPrescription", functional=True)
+    obj("hasPrescription", "Patient", "Prescription", "A prescription issued for a patient. Inferred as the inverse of prescribedFor.")
+    obj("prescribedBy", "Prescription", "Doctor", "The doctor who issued a prescription.", inverse="issuedPrescription")
+    obj("issuedPrescription", "Doctor", "Prescription", "A prescription this doctor issued. Inferred as the inverse of prescribedBy.")
+    obj("containsMedication", "Prescription", "Medication", "A medication listed on a prescription.", inverse="containedInPrescription")
+    obj("containedInPrescription", "Medication", "Prescription", "A prescription that lists this medication. Inferred as the inverse of containsMedication.")
+    obj("medicationCategory", "Medication", "MedicationCategory", "A therapeutic category of a medication. A medication may have several.")
+    obj("hasAllergy", "Patient", "Allergy", "An allergy recorded for a patient.", inverse="allergyForPatient")
+    obj("allergyForPatient", "Allergy", "Patient", "The patient this allergy is recorded for. Inferred as the inverse of hasAllergy.", functional=True)
+    obj("allergyToMedication", "Allergy", "Medication", "The medication that a patient is allergic to.")
+    obj("hasVaccination", "Patient", "Vaccination", "A vaccination given to a patient.")
+    obj("administeredBy", "Vaccination", "Practitioner", "The practitioner who gave a vaccination.")
+
+    # ---- diagnostic tests and observations ----------------------------------
+    obj("orderedTest", "Practitioner", "DiagnosticTest", "A diagnostic test ordered by a practitioner.", inverse="orderedBy")
+    obj("orderedBy", "DiagnosticTest", "Practitioner", "The practitioner who ordered this test. Inferred as the inverse of orderedTest.", functional=True)
+    obj("underwentTest", "Patient", "DiagnosticTest", "A diagnostic test performed on a patient.", inverse="testForPatient")
+    obj("testForPatient", "DiagnosticTest", "Patient", "The patient this test was performed on. Inferred as the inverse of underwentTest.", functional=True)
+    obj("producesResult", "DiagnosticTest", "DiagnosticResult", "The result produced by a test.", inverse="resultOfTest")
+    obj("resultOfTest", "DiagnosticResult", "DiagnosticTest", "The test that produced a result. Inferred as the inverse of producesResult.")
+    obj("reviewedByDoctor", "DiagnosticResult", "Doctor", "The doctor who reviewed a result.")
+    obj("hasObservation", "Patient", "Observation", "An observation made about a patient.", inverse="observationForPatient")
+    obj("observationForPatient", "Observation", "Patient", "The patient an observation is about. Inferred as the inverse of hasObservation.", functional=True)
+    obj("recordedBy", "Observation", "Practitioner", "The practitioner who recorded an observation.")
+
+    # ---- care plan, notes, billing ------------------------------------------
+    obj("followsCarePlan", "Patient", "CarePlan", "A care plan that a patient follows.")
+    obj("createdByDoctor", "CarePlan", "Doctor", "The doctor who created a care plan.")
+    obj("hasClinicalNote", "MedicalRecord", "ClinicalNote", "A note filed in a medical record.")
+    obj("authoredBy", "ClinicalNote", "Practitioner", "The practitioner who wrote a note.")
+    obj("hasBilling", "Patient", "Billing", "A billing entry for a patient.")
+    obj("generatesInvoice", "Billing", "Invoice", "An invoice generated from a billing entry.")
+    obj("submitsClaim", "Billing", "InsuranceClaim", "A claim submitted from a billing entry.")
+    obj("claimAgainstPolicy", "InsuranceClaim", "InsurancePolicy", "The policy a claim is made against.")
+
+    # ---- vocabulary, identification, coding ----------------------------------
+    obj("administrativeGender", "Person", "AdministrativeGender", "The administrative gender recorded for a person.", functional=True)
+    obj("hasSpecialty", ["Practitioner", "Department"], "Specialty", "A clinical specialty of a practitioner or of a department.")
+    obj("hasIdentifier", ["Person", "Organization"], "Identifier", "A business identifier of a person or an organization.")
+    obj("identifierAssigner", "Identifier", "Organization", "The organization that issued an identifier.", functional=True)
+    obj("hasCode", ["Condition", "Observation", "Medication", "Procedure", "DiagnosticTest"], "CodeConcept", "Binds an entity to a concept in an external code system. An entity may have several codings (for example ICD-10 and SNOMED CT).")
+
+    for _a, _b in _INVERSES:
+        P[_a].inverse_property = P[_b]
+
+    # ---- data properties ----------------------------------------------------
+    data("firstName", "Person", str, "Given name. A display attribute, never an identity.")
+    data("lastName", "Person", str, "Family name. A display attribute, never an identity.")
+    data("dateOfBirth", "Person", datetime.date, "Calendar date of birth. xsd:date, no time zone: a birth date is a calendar date, not an instant.", functional=True)
+    data("phoneNumber", "Person", str, "Contact telephone number.", functional=False)
+    data("emailAddress", "Person", str, "Contact e-mail address.", functional=False)
+    data("address", "Person", str, "Postal address as free text.", functional=False)
+    data("bloodGroup", "Patient", str, "ABO/Rh blood group, for example O+.")
+    data("maritalStatus", "Patient", str, "Marital status as free text.")
+    data("emergencyContact", "Patient", str, "Emergency contact as free text.", functional=False)
+    data("patientStatus", "Patient", str, "Administrative status of the patient record.")
+    data("yearsOfExperience", "Doctor", int, "Years of professional experience.")
+    data("consultationFee", "Doctor", float, "Standard consultation fee.")
+    data("shiftType", "Nurse", str, "Usual shift pattern.")
+    data("hospitalId", "Hospital", str, "Local hospital code.")
+    data("hospitalName", "Hospital", str, "Display name of the hospital.")
+    data("hospitalLocation", "Hospital", str, "Town or city of the hospital.")
+    data("hospitalType", "Hospital", str, "Kind of hospital, for example teaching or community.")
+    data("totalBeds", "Hospital", int, "Total number of beds.")
+    data("departmentCode", "Department", str, "Local department code.")
+    data("departmentName", "Department", str, "Display name of the department.")
+    data("roomNumber", "Room", str, "Room number.")
+    data("roomType", "Room", str, "Kind of room.")
+    data("floorNumber", "Room", int, "Floor on which the room is located.")
+    data("bedNumber", "Bed", str, "Bed number.")
+    data("bedStatus", "Bed", str, "Occupancy status of the bed.")
+    # Encounter / appointment
+    data("encounterStart", "Encounter", datetime.datetime, "Instant the encounter began. xsd:dateTime WITH a time zone offset (an instant must be unambiguous).", functional=True)
+    data("encounterEnd", "Encounter", datetime.datetime, "Instant the encounter ended. xsd:dateTime with a time zone offset.", functional=True)
+    data("encounterReason", "Encounter", str, "Reason for the encounter as free text.")
+    data("appointmentId", "Appointment", str, "Local appointment number.")
+    data("scheduledStart", "Appointment", datetime.datetime, "Planned start instant. xsd:dateTime with a time zone offset.", functional=True)
+    data("appointmentStatus", "Appointment", str, "Booking status (for example Scheduled, Completed).")
+    data("appointmentReason", "Appointment", str, "Reason for the appointment.")
+    # Records, conditions, observations
+    data("recordNumber", "MedicalRecord", str, "Local medical record number.")
+    data("recordCreatedDate", "MedicalRecord", datetime.date, "Calendar date the record was opened.", functional=True)
+    data("clinicalStatus", "Condition", str, "Clinical status: active, recurrence, remission or resolved.", functional=True)
+    data("onsetDate", "Condition", datetime.date, "Date the condition began. xsd:date because onset is rarely known more precisely.", functional=True)
+    data("abatementDate", "Condition", datetime.date, "Date the condition resolved.", functional=True)
+    data("diagnosisName", "Diagnosis", str, "Human-readable name of the diagnosis.")
+    data("diagnosisDescription", "Diagnosis", str, "Free-text description of the diagnosis.")
+    data("diagnosisDate", "Diagnosis", datetime.date, "Date the diagnosis was established.", functional=True)
+    data("effectiveDateTime", "Observation", datetime.datetime, "Instant the observation applies to. xsd:dateTime with a time zone offset.", functional=True)
+    data("observationValue", "Observation", float, "Numeric result. Always accompanied by observationUnit.", functional=True)
+    data("observationUnit", "Observation", str, "Unit of observationValue, as a UCUM code.", functional=True)
+    data("observationValueText", "Observation", str, "Non-numeric result as text.", functional=False)
+    data("resultStatus", "DiagnosticResult", str, "Status of the result (for example Preliminary, Final).")
+    # Treatment, procedure
+    data("treatmentId", "Treatment", str, "Local treatment number.")
+    data("treatmentName", "Treatment", str, "Display name of the treatment.")
+    data("treatmentStatus", "Treatment", str, "Planned, Active, Completed or Cancelled.")
+    data("treatmentCost", "Treatment", float, "Cost of the treatment.")
+    data("procedureName", "Procedure", str, "Display name of the procedure.")
+    data("performedDateTime", "Procedure", datetime.datetime, "Instant the procedure was performed. xsd:dateTime with a time zone offset.", functional=True)
+    data("surgeryDurationMinutes", "Surgery", int, "Duration of the surgery in minutes.")
+    # Tests
+    data("testName", "DiagnosticTest", str, "Display name of the test.")
+    data("testDate", "DiagnosticTest", datetime.date, "Calendar date the test was performed.", functional=True)
+    # Medication
+    data("medicationName", "Medication", str, "Display name of the medication.")
+    data("manufacturer", "Medication", str, "Manufacturer of a medication product.")
+    data("isControlledSubstance", "Medication", bool, "Whether the drug is a controlled substance. A regulatory status, not a therapeutic category.", functional=True)
+    data("prescriptionNumber", "Prescription", str, "Local prescription number.")
+    data("prescriptionDate", "Prescription", datetime.date, "Calendar date the prescription was issued.", functional=True)
+    data("dosageInstruction", "Prescription", str, "Dose and schedule for this patient. A property of the order, not of the drug.")
+    # Financial
+    data("policyNumber", "InsurancePolicy", str, "Policy number.")
+    data("insuranceProvider", "InsurancePolicy", str, "Insurer name.")
+    data("coverageAmount", "InsurancePolicy", float, "Coverage limit.")
+    data("billingNumber", "Billing", str, "Billing reference.")
+    data("billingAmount", "Billing", float, "Billed amount.")
+    data("paymentStatus", "Billing", str, "Payment status.")
+    data("invoiceNumber", "Invoice", str, "Invoice number.")
+    data("invoiceDate", "Invoice", datetime.date, "Calendar date of the invoice.", functional=True)
+    # Identification and coding
+    data("identifierSystem", "Identifier", AnyURI, "IRI naming the system that issued the identifier.", functional=True)
+    data("identifierValue", "Identifier", str, "The identifier value, unique within its system.", functional=True)
+    data("identifierType", "Identifier", str, "Kind of identifier, for example MRN or license.", functional=True)
+    data("codeSystem", "CodeConcept", AnyURI, "IRI of the external code system (for example http://loinc.org).", functional=True)
+    data("codeValue", "CodeConcept", str, "The code within the code system.", functional=True)
+    data("codeDisplay", "CodeConcept", str, "Human-readable display text of the code.", functional=True)
+
+    # ========================================================================
+    # AXIOMS - only where they carry meaning that a reasoner can use
+    # ========================================================================
+    # Top-level categories do not overlap. Roles (Patient/Practitioner) are NOT
+    # disjoint: a nurse can be a patient.
+    AllDisjoint([C[n] for n in (
+        "Person", "Organization", "Location", "Encounter", "Appointment", "Condition",
+        "Observation", "Procedure", "Treatment", "DiagnosticTest", "Medication",
+        "Prescription", "Allergy", "Identifier", "CodeConcept", "CarePlan",
+    )])
+    AllDisjoint([C[n] for n in ("Specialty", "AdministrativeGender", "EncounterType", "MedicationCategory")])
+    AllDisjoint([C["LaboratoryTest"], C["ImagingStudy"]])
+    AllDisjoint([C[n] for n in ("Ward", "Room", "Bed")])
+
+    # ========================================================================
+    # CONTROLLED VOCABULARIES (SKOS)
+    # ========================================================================
+    def scheme(name, label):
+        s = skos.ConceptScheme(name)
+        s.label = [label]
+        s.prefLabel = [locstr(label, "en")]
+        return s
+
+    def concept(cls, name, label, scheme_ind, code=None):
+        ind = cls(name)
+        ind.label = [label]
+        ind.prefLabel = [locstr(label, "en")]
+        ind.inScheme = [scheme_ind]
+        if code:
+            ind.notation = [code]
+        return ind
+
+    s_spec = scheme("SpecialtyScheme", "Clinical specialties (illustrative subset)")
+    SPEC = {n: concept(C["Specialty"], "Specialty" + n, lbl, s_spec) for n, lbl in SPECIALTIES.items()}
+
+    s_gen = scheme("AdministrativeGenderScheme", "Administrative gender")
+    GEN = {n: concept(C["AdministrativeGender"], "Gender" + n, n, s_gen, code=n.lower()) for n in GENDERS}
+
+    s_enc = scheme("EncounterTypeScheme", "Encounter type")
+    ENC = {n: concept(C["EncounterType"], "EncounterType" + n, lbl, s_enc, code=code)
+           for n, (lbl, code) in ENCOUNTER_TYPES.items()}
+
+    s_cat = scheme("MedicationCategoryScheme", "Medication category")
+    CAT = {n: concept(C["MedicationCategory"], "MedCategory" + n, lbl, s_cat) for n, lbl in MEDICATION_CATEGORIES.items()}
+
+    # Defined classes: membership is INFERRED from category/type, replacing the old
+    # hand-assigned subclasses (the source of "metformin is an Analgesic").
+    class AntidiabeticMedication(C["Medication"]):
+        equivalent_to = [C["Medication"] & P["medicationCategory"].value(CAT["Antidiabetic"])]
+    AntidiabeticMedication.label = ["antidiabetic medication"]
+    AntidiabeticMedication.comment = ["A Medication categorized as antidiabetic. Defined, not asserted: a reasoner classifies medications into it."]
+    C["AntidiabeticMedication"] = AntidiabeticMedication
+
+    class InpatientEncounter(C["Encounter"]):
+        equivalent_to = [C["Encounter"] & P["encounterType"].value(ENC["Inpatient"])]
+    InpatientEncounter.label = ["inpatient encounter"]
+    InpatientEncounter.comment = ["An Encounter whose encounterType is Inpatient. Defined, not asserted."]
+    C["InpatientEncounter"] = InpatientEncounter
+
+    # ---- ontology header ----------------------------------------------------------------------------
+    onto.metadata.label.append("Healthcare Hospital Ontology")
+    onto.metadata.comment.append(
+        "A small, bounded teaching ontology for hospital care: people, organizations, encounters, "
+        "conditions, observations, medication and terminology binding. Not a clinical system. "
+        "See docs/ontology-engineering.md."
     )
+    onto.metadata.versionInfo.append(ONTOLOGY_VERSION)
 
-    blood_test_1.producesResult.append(
-        blood_result_1
-    )
 
-    blood_result_1.reviewedByDoctor.append(
-        dr_smith
-    )
+VOCABULARY_CLASSES = {"Specialty", "AdministrativeGender", "EncounterType", "MedicationCategory", "ConceptScheme"}
 
-    # Insurance
 
-    patient_john.coveredByInsurance.append(
-        policy_a
-    )
+def schema_problems(graph):
+    """Reasons this graph is not a pure schema. Individuals are allowed ONLY if they are controlled-vocabulary
+    concepts or schemes (SKOS): those are part of the ontology's vocabulary, not synthetic data."""
+    from rdflib import OWL, RDF
 
-    billing_1.submitsClaim.append(claim_a)
+    problems = []
+    for ind in graph.subjects(RDF.type, OWL.NamedIndividual):
+        types = {str(t).split("#")[-1] for t in graph.objects(ind, RDF.type) if t != OWL.NamedIndividual}
+        if not types & VOCABULARY_CLASSES:
+            problems.append(f"{str(ind).split('#')[-1]} (a {', '.join(sorted(types)) or 'thing'}) is an individual, not schema")
+    return problems
 
-    claim_a.claimAgainstPolicy.append(
-        policy_a
-    )
 
-    # Billing
+def generate(output_path, validate_output=True):
+    """Build the schema (TBox + controlled vocabularies) and write it as Turtle, atomically.
 
-    patient_john.hasBilling.append(
-        billing_1
-    )
+    This script generates the SCHEMA ONLY. Synthetic patients, encounters, medications and the rest are
+    generated by scripts/generate_sample_data.py into data/sample_data.ttl. Nothing is written if the result
+    contains an individual that is not a vocabulary concept.
+    """
+    import tempfile
 
-    billing_1.generatesInvoice.append(
-        invoice_1
-    )
+    from rdflib import Graph
 
-    # Care Plan
+    from core.dataset import HC, write_turtle
 
-    patient_john.followsCarePlan.append(
-        careplan_1
-    )
+    fd, tmp = tempfile.mkstemp(suffix=".owl")
+    os.close(fd)
+    try:
+        onto.save(file=tmp, format="rdfxml")
+        graph = Graph().parse(tmp, format="xml")
+    finally:
+        os.unlink(tmp)
+    problems = schema_problems(graph)
+    if problems:
+        raise SystemExit("the schema contains instance data; nothing was written:\n  " + "\n  ".join(problems[:20]))
+    if validate_output:
+        from core.shacl_validator import ShaclValidator
 
-    careplan_1.createdByDoctor.append(
-        dr_smith
-    )
+        result = ShaclValidator().validate_graph(graph, data_source="schema")
+        if not result.summary.conforms:
+            lines = [f"  {v.focus_node.split('#')[-1]}: {v.message}" for v in result.violations if v.severity != "Info"]
+            raise SystemExit("the schema fails SHACL; nothing was written:\n" + "\n".join(lines[:25]))
+    header = ("# Healthcare ontology SCHEMA (TBox + controlled vocabularies). GENERATED by scripts/generate_hc_ontology.py.\n"
+              "# Do not edit by hand. Synthetic instance data lives in data/sample_data.ttl.\n")
+    write_turtle(graph, output_path, {
+        "hc": HC, "owl": "http://www.w3.org/2002/07/owl#", "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#", "xsd": "http://www.w3.org/2001/XMLSchema#",
+        "skos": "http://www.w3.org/2004/02/skos/core#",
+    }, header)
+    return output_path
 
-    # Observation
-
-    patient_john.hasObservation.append(
-        observation_1
-    )
-
-    observation_1.recordsVitalSign.append(
-        vitals_1
-    )
-
-    observation_1.enteredByNurse.append(
-        nurse_mary
-    )
-
-    # Emergency
-
-    emergency_case_1.emergencyCaseFor.append(
-        patient_david
-    )
-
-    emergency_case_1.handledByDoctor.append(
-        dr_williams
-    )
-
-    emergency_case_1.transportedBy.append(
-        ambulance_1
-    )
 
 if __name__ == "__main__":
-    print("REACHED SAVE")
-    # =========================================================================
-    # 9. SAVE
-    # =========================================================================
+    import argparse
 
-    # Always save at project root (parent of scripts/), regardless of CWD
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    output_path  = os.path.join(project_root, "healthcare_ontology.owl")
-
-    onto.save(file=output_path, format="rdfxml")
-
-    # Verify the file was actually written
-    if os.path.exists(output_path):
-        size_kb = os.path.getsize(output_path) / 1024
-        print(f"  OWL file saved successfully!")
-        print(f"    Path : {output_path}")
-        print(f"    Size : {size_kb:.1f} KB")
-        print()
-        print("Next steps in Protege:")
-        print("  1. File → Open  → select healthcare_ontology.owl")
-        print("  2. Browse Classes, Object Properties, Data Properties, Individuals tabs")
-    else:
-        print("  Save failed — file not found after save(). Check folder permissions.")
-        print("SAVE COMPLETE")
+    parser = argparse.ArgumentParser(description="Generate the healthcare ontology SCHEMA (ontology/healthcare_schema.ttl)")
+    parser.add_argument("--output", help="Output path (default: <project root>/ontology/healthcare_schema.ttl)")
+    parser.add_argument("--skip-shacl", action="store_true", help="Do not SHACL-validate the generated schema (debugging only)")
+    args = parser.parse_args()
+    output_path = args.output or os.path.join(ROOT, "ontology", "healthcare_schema.ttl")
+    generate(output_path, validate_output=not args.skip_shacl)
+    print(f"Wrote {output_path} ({os.path.getsize(output_path) / 1024:.1f} KB)")
+    print(f"classes={len(list(onto.classes()))} object_properties={len(list(onto.object_properties()))} "
+          f"data_properties={len(list(onto.data_properties()))} vocabulary_individuals={len(list(onto.individuals()))}")
